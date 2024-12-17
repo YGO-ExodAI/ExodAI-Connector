@@ -1,76 +1,12 @@
 # WindBot Ignite
 
-A fork of [IceYGO's WindBot](https://github.com/IceYGO/windbot), ported to the
-[Project Ignis: EDOPro](https://github.com/edo9300/edopro) network protocol.
+A fork of [WindBot](https://github.com/ProjectIgnis/windbot/), modify for use as an entry point to the EDOPro client for AI models
 
-This is a simple, deterministic artificial intelligence that connects as a
-virtual player to the YGOPro room system. Decks for this bot player **must** be
-specifically prepared and compiled as individual executors.
+### Usage
 
-Written in C# targeting .NET Framework 4. Use Visual Studio 2015 or newer.
-
-## Available decks and executors
-* ABC
-* Altergeist
-* Blue-Eyes
-* Blue-Eyes Ritual
-* Burn
-* Chain Burn
-* Cyberse
-* Dark Magician
-* Dragma
-* Dragunity
-* Dragun of Red-Eyes
-* Frog
-* Gren Maju Stun
-* Horus
-* Kashtira
-* Lightsworn Shaddoll Dino
-* Mathmech
-* Normal Monster Mash
-* Normal Monster Mash II
-* Orcust
-* Qliphort
-* R5NK
-* Rainbow
-* Rose Scrap Synchro
-* Salamangreat
-* Sky Striker
-* Thunder Dragon
-* Tearlaments
-* Time Thief
-* Toadally Awesome
-* Trickstar
-* Windwitch Gusto
-* Witchcrafter Grass
-* Yosenju
-* ZEXAL Weapon
-* Zoodiac
-
-## Contributing
-
-Pull requests are welcome for fixes and new additions! It might take some time
-for them to be evaluated since we are pretty swamped with a lot work to be done.
-
-Please keep bug reports on Discord so we can verify them first.
-
-For new additions, please make sure you add new code files to both the WindBot
-and libWindbot projects. You need only worry about testing the WindBot project.
-
-## Other architectural changes from upstream
-[Old README](https://github.com/ProjectIgnis/windbot/tree/master/README-old.md),
-including some command-line documentation.
-
-The Visual Studio project has been merged with
-[libWindbot](https://github.com/mercury233/libWindbot), meant for use as an
-Android aar. Most of the code is shared with the main WindBot project, minus
-the few specific bindings to call the bot as a library instead of a separate
-process. The repository structure has been improved to keep the sources for
-YGOSharp around as a result, but sqlite3 DLLs are still sitting around.
-
-ExecutorBase is a refactor to experiment with loading additional executors
-from DLLs in an executor folder. See SampleExecutor for an example project using
-this experimental feature.
+To use the bot in its current form, clone the repo (if you run into any issues with dependencies during compilation see the link below) and
+launch Main from Program.cs in the Windbot project. You must have an open lobby of the EDOPro client with one empty player slot or the
+bot will fail to find a room and quit out. From there you can see the options the player has at a given moment via the console.
 
 ### libWindbot
 
