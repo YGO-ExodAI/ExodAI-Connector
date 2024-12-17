@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace WindBot.Game.AI
 {
     public static class HintMsg
@@ -57,5 +59,75 @@ namespace WindBot.Game.AI
         ToZone = 571,
         Counter = 572,
         Negate = 575;
+
+        // Reverse lookup dictionary
+        private static readonly Dictionary<long, string> _reverseLookup = new Dictionary<long, string>
+        {
+            { Release, nameof(Release) },
+            { Discard, nameof(Discard) },
+            { Destroy, nameof(Destroy) },
+            { Remove, nameof(Remove) },
+            { ToGrave, nameof(ToGrave) },
+            { ReturnToHand, nameof(ReturnToHand) },
+            { AddToHand, nameof(AddToHand) },
+            { ToDeck, nameof(ToDeck) },
+            { Summon, nameof(Summon) },
+            { SpSummon, nameof(SpSummon) },
+            { Set, nameof(Set) },
+            { FusionMaterial, nameof(FusionMaterial) },
+            { SynchroMaterial, nameof(SynchroMaterial) },
+            { XyzMaterial, nameof(XyzMaterial) },
+            { Faceup, nameof(Faceup) },
+            { Facedown, nameof(Facedown) },
+            { Attack, nameof(Attack) },
+            { Defense, nameof(Defense) },
+            { Equip, nameof(Equip) },
+            { RemoveXyz, nameof(RemoveXyz) },
+            { Control, nameof(Control) },
+            { DestroyReplace, nameof(DestroyReplace) },
+            { FaceupAttack, nameof(FaceupAttack) },
+            { FaceupDefense, nameof(FaceupDefense) },
+            { FacedownAttack, nameof(FacedownAttack) },
+            { FacedownDefense, nameof(FacedownDefense) },
+            { Confirm, nameof(Confirm) },
+            { ToField, nameof(ToField) },
+            { PosChange, nameof(PosChange) },
+            { Self, nameof(Self) },
+            { Oppo, nameof(Oppo) },
+            { Tribute, nameof(Tribute) },
+            { DeattachFrom, nameof(DeattachFrom) },
+            { LinkMaterial, nameof(LinkMaterial) },
+            { AttackTarget, nameof(AttackTarget) },
+            { Effect, nameof(Effect) },
+            { Target, nameof(Target) },
+            { Coin, nameof(Coin) },
+            { Dice, nameof(Dice) },
+            { CardType, nameof(CardType) },
+            { Option, nameof(Option) },
+            { ResolveEffect, nameof(ResolveEffect) },
+            { Select, nameof(Select) },
+            { Position, nameof(Position) },
+            { Attribute, nameof(Attribute) },
+            { Race, nameof(Race) },
+            { Code, nameof(Code) },
+            { Number, nameof(Number) },
+            { LvRank, nameof(LvRank) },
+            { ResolveCard, nameof(ResolveCard) },
+            { Zone, nameof(Zone) },
+            { DisableZone, nameof(DisableZone) },
+            { ToZone, nameof(ToZone) },
+            { Counter, nameof(Counter) },
+            { Negate, nameof(Negate) }
+        };
+
+        // Method to get the name by value
+        public static string GetHintName(long value)
+        {
+            if (_reverseLookup.TryGetValue(value, out string name))
+            {
+                return name;
+            }
+            return "Unknown";
+        }
     }
 }

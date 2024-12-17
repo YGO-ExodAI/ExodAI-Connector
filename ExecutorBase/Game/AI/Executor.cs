@@ -5,6 +5,7 @@ using YGOSharp.OCGWrapper.Enums;
 using WindBot;
 using WindBot.Game;
 using WindBot.Game.AI;
+using System.Text;
 
 namespace WindBot.Game.AI
 {
@@ -169,12 +170,17 @@ namespace WindBot.Game.AI
             return null;
         }
 
-        public virtual void OnSelectChain(IList<ClientCard> cards)
+        public virtual int OnSelectChain(IList<ClientCard> cards, bool forced)
         {
-            return;
+            return -2;
         }
 
         public virtual bool OnSelectYesNo(long desc)
+        {
+            return true;
+        }
+
+        public virtual bool OnSelectEffectYesNo(ClientCard card, long desc)
         {
             return true;
         }
@@ -226,6 +232,16 @@ namespace WindBot.Game.AI
         public void SetMain(MainPhase main)
         {
             Main = main;
+        }
+
+        public virtual MainPhaseAction GenerateMainPhaseAction()
+        {
+            return null;
+        }
+
+        public virtual BattlePhaseAction GenerateBattlePhaseAction()
+        {
+            return null;
         }
 
         public void SetBattle(BattlePhase battle)

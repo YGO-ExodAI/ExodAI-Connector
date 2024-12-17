@@ -97,6 +97,7 @@ namespace WindBot.Game
             }
             else
             {
+                Logger.WriteLine($"{deck} deck not found, loading random deck.");
                 do
                 {
                     infos = _list[_rand.Next(_list.Count)];

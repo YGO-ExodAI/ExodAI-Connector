@@ -256,5 +256,11 @@
         "deck": "[ImaginaryArk]",
         "difficulty": 2,
         "masterRules": [ 7 ]
+    },
+    {
+        "name": "Basic",
+        "deck": "Basic",
+        "difficulty": 3,
+        "masterRules": [ 1, 2, 3, 4, 5, 6, 7 ]
     }
 ]

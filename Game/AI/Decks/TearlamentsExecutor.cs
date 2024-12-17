@@ -710,13 +710,14 @@ namespace WindBot.Game.AI.Decks
             if (desc == Util.GetStringId(CardId.PrimevalPlanetPerlereino, 0)) pre_activate_PrimevalPlanetPerlereino = true;
             return base.OnSelectYesNo(desc);
         }
-        public override void OnSelectChain(IList<ClientCard> cards)
+        public override int OnSelectChain(IList<ClientCard> cards, bool forced)
         {
             if (on_chaining_cards.Count <= 0 && cards.Count > 0)
             {
                 on_chaining_cards = new List<ClientCard>(cards);
             }
-            base.OnSelectChain(cards);
+            base.OnSelectChain(cards, forced);
+            return -2;
         }
         public override void OnChaining(int player, ClientCard card)
         {

@@ -48,6 +48,7 @@
     <Compile Include="Game\AI\Deck.cs" />
     <Compile Include="Game\AI\Decks\ABCExecutor.cs" />
     <Compile Include="Game\AI\Decks\AltergeistExecutor.cs" />
+    <Compile Include="Game\AI\Decks\BasicExecutor.cs" />
     <Compile Include="Game\AI\Decks\FamiliarPossessedExecutor.cs" />
     <Compile Include="Game\AI\Decks\BlackwingExecutor.cs" />
     <Compile Include="Game\AI\Decks\KashtiraExecutor.cs" />
@@ -121,12 +122,6 @@
     <Compile Include="YGOSharp.Network\NetworkServer.cs" />
     <Compile Include="YGOSharp.Network\Utils\BinaryExtensions.cs" />
     <Compile Include="YGOSharp.Network\YGOClient.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="Embeddinator-4000">
-      <Version>0.4.0</Version>
-    </PackageReference>
-    <PackageReference Include="Xamarin.Android.Support.v7.AppCompat" Version="25.4.0.2" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="ExecutorBase\ExecutorBase.csproj">
