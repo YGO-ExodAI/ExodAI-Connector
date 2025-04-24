@@ -5,13 +5,20 @@ using WindBot.Game;
 using WindBot.Game.AI;
 using System;
 using System.Text;
+using System.Linq;
 
 namespace WindBot.Game.AI.Decks
 {
     [Deck("Basic", "AI_Yugi_Kaiba_Beat", "Easy")]
     public class ManualExecutor : Executor
     {
-        // AI_DinoRabbit AI_Basic
+
+        public List<int> masterDecklist;
+        public List<int> currentDecklist;
+
+        private bool pendingCardDraw;
+        private int cardsDrawn;
+
         public ManualExecutor(GameAI ai, Duel duel) : base(ai, duel)
         {
             Console.WriteLine("Using ManualExecutor");
@@ -23,10 +30,33 @@ namespace WindBot.Game.AI.Decks
             {
                 Console.WriteLine("Player 1");
             }
+            var deck = WindBot.Game.Deck.Load(GetDeckName());
+
+            masterDecklist = deck.Cards.ToList();
+            currentDecklist = deck.Cards.ToList();
+        }
+
+        public override void OnStartDuel()
+        {
+            currentDecklist = masterDecklist.ToList();
+        }
+
+        private string GetDeckName()
+        {
+            var attribute = (DeckAttribute)Attribute.GetCustomAttribute(typeof(ManualExecutor), typeof(DeckAttribute));
+            return attribute?.File ?? "DefaultDeckName";
         }
 
         public override MainPhaseAction GenerateMainPhaseAction()
         {
+            if(Duel.Player == 0)
+            {
+                Console.WriteLine("I'm player 0");
+            }
+            else
+            {
+                Console.WriteLine("I'm player 1");
+            }
             Console.WriteLine(LogMainPhaseOptions());
             char group;
             int index;
@@ -94,6 +124,66 @@ namespace WindBot.Game.AI.Decks
             return action;
         }
 
+        public override void OnDraw(int player, int count)
+        {
+            Console.WriteLine($"Player {player} drew {count} cards");
+            if(player != 0)
+            {
+                return;
+            }
+
+            pendingCardDraw = true;
+            cardsDrawn = count;
+        }
+
+        public override void OnUpdateData(int player, CardLocation location)
+        {
+            // If the player is not the bot, we don't care about the update
+            if (player != 0)
+            {
+                return;
+            }
+
+            // If this update is a draw update and we have the flag still active, we need to update the decklist with the newly drawn cards
+            if (pendingCardDraw)
+            {
+                var drawnCards = currentDecklist.Skip(currentDecklist.Count - cardsDrawn).ToList();
+
+                foreach (var card in drawnCards)
+                {
+                    Console.WriteLine($"Card {card} was drawn");
+                    currentDecklist.Remove(card);
+                }
+
+                Console.WriteLine($"Cards left in deck: {currentDecklist.Count}");
+                pendingCardDraw = false;
+            }
+        }
+
+        public override void OnMoveCard(CardLocation source, int sourceController, CardLocation dest, int destController, int reason, int cardId)
+        {
+            if (source == dest)
+            {
+                return; // Ignore cards moving to the same location
+            }
+
+            // If the card is leaving the deck, we need to update our deck list to reflect the change
+            if (sourceController == 0 && source == CardLocation.Deck)
+            {
+                Console.WriteLine($"Card {cardId} was removed from my deck");
+                currentDecklist.Remove(cardId);
+            }
+
+            // If the card is entering the deck, we need to update our deck list to reflect the change
+            else if (destController == 0 && dest == CardLocation.Deck)
+            {
+                Console.WriteLine($"Card {cardId} was added to my deck");
+                currentDecklist.Add(cardId);
+            }
+
+            Console.WriteLine($"Cards left in deck: {currentDecklist.Count}");
+        }
+
         public override BattlePhaseAction GenerateBattlePhaseAction()
         {
             Console.WriteLine(LogBattlePhaseOptions());
@@ -101,11 +191,11 @@ namespace WindBot.Game.AI.Decks
             int index;
 
             var validGroups = new Dictionary<char, int>
-        {
-            { 'b', Battle.AttackableCards.Count },
-            { 'a', Battle.ActivableCards.Count },
-            { 'p', 3 } // Options: 1 for Main Phase 2, 2 for End Phase
-        };
+            {
+                { 'b', Battle.AttackableCards.Count },
+                { 'a', Battle.ActivableCards.Count },
+                { 'p', 3 } // Options: 1 for Main Phase 2, 2 for End Phase
+            };
 
             while (true)
             {

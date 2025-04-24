@@ -111,9 +111,19 @@ namespace WindBot.Game.AI
             // Some AI need do something on new turn
         }
 		
-        public virtual void OnDraw(int player)
+        public virtual void OnDraw(int player, int count)
         {
             // Some AI need do something on draw
+        }
+
+        public virtual void OnUpdateData(int player, CardLocation location)
+        {
+            // Some AI need do something on update data
+        }
+
+        public virtual void OnStartDuel()
+        {
+            // Some AI need do something on start duel
         }
 
         public virtual IList<ClientCard> OnSelectCard(IList<ClientCard> cards, int min, int max, long hint, bool cancelable)
@@ -168,6 +178,16 @@ namespace WindBot.Game.AI
         {
             // For overriding
             return null;
+        }
+
+        public virtual void OnMoveCard(CardLocation source, int sourceController, CardLocation dest, int destController, int reason, int cardId)
+        {
+            // For overriding
+        }
+
+        public virtual void OnActivateCard(Dictionary<int, int> activatedCards)
+        {
+            // For overriding
         }
 
         public virtual int OnSelectChain(IList<ClientCard> cards, bool forced)

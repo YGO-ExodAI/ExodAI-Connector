@@ -199,6 +199,8 @@ namespace WindBot.Game
                         return packet.BaseStream.Position - pos;
                     default:
                         {
+                            // TODO: parse out the remainder of the client card data that we received
+                            //Console.WriteLine($"Unused packet: {BitConverter.ToString(packet.ReadChars(size - sizeof(uint)).Select(c => (byte)c).ToArray())}");
                             packet.ReadChars(size - sizeof(uint));
                             break;
                         }

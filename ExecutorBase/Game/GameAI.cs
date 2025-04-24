@@ -78,6 +78,7 @@ namespace WindBot.Game
         public void OnStart()
         {
             _dialogs.SendDuelStart();
+            _executor.OnStartDuel();
         }
 
         /// <summary>
@@ -101,9 +102,17 @@ namespace WindBot.Game
         /// <summary>
         /// Called when any player draw card.
         /// </summary>
-        public void OnDraw(int player)
+        public void OnDraw(int player, int count)
         {
-            _executor.OnDraw(player);
+            _executor.OnDraw(player, count);
+        }
+
+        /// <summary>
+        /// Called when the AI has to update its data.
+        /// </summary>
+        public void OnUpdateData(int player, CardLocation location)
+        {
+            _executor.OnUpdateData(player, location);
         }
 
         /// <summary>
@@ -463,6 +472,7 @@ namespace WindBot.Game
                     if (ShouldExecute(exec, card, ExecutorType.Activate, main.ActivableDescs[i]))
                     {
                         _dialogs.SendActivate(card.Name);
+                        _executor.OnActivateCard(_activatedCards);
                         return new MainPhaseAction(MainPhaseAction.MainAction.Activate, card.ActionActivateIndex[main.ActivableDescs[i]]);
                     }
                 }
@@ -808,10 +818,22 @@ namespace WindBot.Game
             return avail[0];
         }
 
+        /// <summary>
+        /// Called when a card is moved from any position to any other position
+        /// </summary>
+        /// <param name="source"></param>
+        /// <param name="dest"></param>
+        /// <param name="reason"></param>
+        /// <param name="cardId"></param>
+        public void OnMoveCard(CardLocation source, int sourceController, CardLocation dest, int destController, int reason, int cardId)
+        {
+            _executor.OnMoveCard(source, sourceController, dest, destController, reason, cardId);
+        }
+
         // _ Others functions _
         // Those functions are used by the AI behavior.
 
-        
+
         private CardSelector m_materialSelector;
         private int m_materialSelectorHint;
         private int m_place;

@@ -5,8 +5,6 @@ VisualStudioVersion = 15.0.28307.960
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WindBot", "WindBot.csproj", "{3E7FAF67-A27D-4A61-B161-93AD4414183E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "libWindbot", "libWindbot.csproj", "{5BCF813B-671E-4B2C-B01E-3EACDC536B65}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExecutorBase", "ExecutorBase\ExecutorBase.csproj", "{A1583FD7-7985-47DD-A835-8134DBF5811C}"
 EndProject
 Global
