@@ -373,8 +373,8 @@ namespace WindBot.Game.AI.Decks
                     if (!TryParseAction(response, validGroups, out group, out index))
                         throw new FormatException("Input must be a valid action (e.g., 'n2', 'd1').");
 
-                    if (group == 'p' && (index < 1 || index > 2))
-                        throw new FormatException("Phase options are 1 for Battle Phase, 2 for End Phase.");
+                    if (group == 'p' && index != 1 && index != 3)
+                        throw new FormatException("Phase options are 1 for Battle Phase, or 3 for End Phase.");
 
                     break;
                 }
@@ -441,8 +441,8 @@ namespace WindBot.Game.AI.Decks
                     if (!TryParseAction(response, validGroups, out group, out index))
                         throw new FormatException("Input must be a valid action (e.g., 'b2', 'a1').");
 
-                    if (group == 'p' && (index < 1 || index > 2))
-                        throw new FormatException("Phase options are 1 for Main Phase 2, 2 for End Phase.");
+                    if (group == 'p' && (index < 2 || index > 3))
+                        throw new FormatException("Phase options are 2 for Main Phase 2, or 3 for End Phase.");
 
                     break;
                 }
@@ -476,7 +476,7 @@ namespace WindBot.Game.AI.Decks
         {
             if (index == 1 && Main.CanBattlePhase)
                 return new MainPhaseAction(MainPhaseAction.MainAction.ToBattlePhase);
-            else if (index == 2 && Main.CanEndPhase)
+            else if (index == 3 && Main.CanEndPhase)
                 return new MainPhaseAction(MainPhaseAction.MainAction.ToEndPhase);
             else
             {
@@ -487,9 +487,9 @@ namespace WindBot.Game.AI.Decks
 
         private BattlePhaseAction GenerateBattlePhaseChangeAction(int index)
         {
-            if (index == 1 && Battle.CanMainPhaseTwo)
+            if (index == 2 && Battle.CanMainPhaseTwo)
                 return new BattlePhaseAction(BattlePhaseAction.BattleAction.ToMainPhaseTwo);
-            else if (index == 2 && Battle.CanEndPhase)
+            else if (index == 3 && Battle.CanEndPhase)
                 return new BattlePhaseAction(BattlePhaseAction.BattleAction.ToEndPhase);
             else
             {
@@ -692,7 +692,7 @@ namespace WindBot.Game.AI.Decks
 
             if (group == 'p')
             {
-                return index == 1 || index == 2; // Specific indices for phase options
+                return index > 0 && index < 4; // Specific indices for phase options
             }
             else
             {
