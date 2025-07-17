@@ -217,6 +217,20 @@ namespace WindBot.Game.AI.Decks
         private bool pendingCardDraw;
         private int cardsDrawn;
 
+        // Constants for maximum sizes
+        private const int MAX_DECK_SIZE = 40;
+        private const int MAX_HAND_SIZE = 12;
+        private const int MAX_GRAVEYARD_SIZE = 40;
+        private const int MAX_BANISHED_SIZE = 40;
+        private const int MAX_SUMMONING_CARDS = 3;
+        private const int MAX_LAST_SUMMONED_CARDS = 3;
+        private const int MAX_CURRENT_CHAIN = 5;
+        private const int MAX_CHAIN_TARGETS = 5;
+        private const int MAX_CHAIN_TARGET_ONLY = 5;
+        private const int MAX_OPTIONS = 20;
+        private const int MAX_CARD_SELECTION_OPTIONS = 20;
+        private const int MAX_CHAIN_SELECTION_OPTIONS = 10;
+
         public ExodAIExecutor(GameAI ai, Duel duel) : base(ai, duel)
         {
             Console.WriteLine("ExodAIExecutor");
@@ -700,8 +714,39 @@ namespace WindBot.Game.AI.Decks
             }
         }
 
+        // Helper method to pad arrays of card data
+        private int[][] PadCardDataArray(IEnumerable<ClientCard> cards, int maxSize)
+        {
+            var cardArray = cards?.Select(c => GetCardDataFromKonamiCode(c.Id)).ToArray() ?? new int[0][];
+            return PadCardDataArray(cardArray, maxSize);
+        }
+
+        private int[][] PadCardDataArray(IEnumerable<int> cardIds, int maxSize)
+        {
+            var cardArray = cardIds?.Select(id => GetCardDataFromKonamiCode(id)).ToArray() ?? new int[0][];
+            return PadCardDataArray(cardArray, maxSize);
+        }
+
+        private int[][] PadCardDataArray(int[][] cardArray, int maxSize)
+        {
+            var result = new int[maxSize][];
+            for (int i = 0; i < maxSize; i++)
+            {
+                if (i < cardArray.Length)
+                {
+                    result[i] = cardArray[i];
+                }
+                else
+                {
+                    // Pad with empty card data (array of zeros)
+                    result[i] = GetCardDataFromKonamiCode(0);
+                }
+            }
+            return result;
+        }
+
         private object BuildOptionGroup(IList<ClientCard> cards,
-                               int padTo = 10,
+                               int padTo = MAX_OPTIONS,
                                bool withLoc = false)
         {
             cards ??= Array.Empty<ClientCard>();
@@ -712,11 +757,27 @@ namespace WindBot.Game.AI.Decks
                                   .ToArray();
 
             // align option features to mask order
-            var feats = cards.Select(c => new
+            var feats = new object[padTo];
+            for (int i = 0; i < padTo; i++)
             {
-                BaseCardData = GetCardDataFromKonamiCode(c.Id),
-                Location = OneHotEncodeLocation(c.Location, locationMatters: withLoc)
-            }).ToArray();
+                if (i < cards.Count)
+                {
+                    feats[i] = new
+                    {
+                        BaseCardData = GetCardDataFromKonamiCode(cards[i].Id),
+                        Location = OneHotEncodeLocation(cards[i].Location, locationMatters: withLoc)
+                    };
+                }
+                else
+                {
+                    // Pad with empty data
+                    feats[i] = new
+                    {
+                        BaseCardData = GetCardDataFromKonamiCode(0),
+                        Location = OneHotEncodeLocation(CardLocation.Deck, locationMatters: withLoc)
+                    };
+                }
+            }
 
             return new
             {
@@ -744,8 +805,8 @@ namespace WindBot.Game.AI.Decks
                     CurrentTurnPlayer = GetBoolAsIntValue(IsBotsTurn()),
                     GameState = GetOneHotGameMessage(currentGameState),
                     Duel.LastSummonPlayer,
-                    SummoningCards = Duel.SummoningCards.Select(c => GetCardDataFromKonamiCode(c.Id)).ToArray(),
-                    LastSummonedCards = Duel.LastSummonedCards.Select(c => GetCardDataFromKonamiCode(c.Id)).ToArray(),
+                    SummoningCards = PadCardDataArray(Duel.SummoningCards, MAX_SUMMONING_CARDS),
+                    LastSummonedCards = PadCardDataArray(Duel.LastSummonedCards, MAX_LAST_SUMMONED_CARDS),
                     ActivatedCardsThisTurn = cardsActivatedThisTurn,
                 },
                 Bot = new
@@ -755,12 +816,12 @@ namespace WindBot.Game.AI.Decks
                     Deck = new
                     {
                         CardsInDeck = GetNormalizedValue(bot.Deck.Count, 100),
-                        Cards = Enumerable.Range(0, currentDecklist.Count).Select(i => GetCardDataFromKonamiCode(currentDecklist[i]))
+                        Cards = PadCardDataArray(currentDecklist, MAX_DECK_SIZE)
                     },
                     Hand = new
                     {
                         CardsInHand = GetNormalizedValue(bot.Hand.Count, 100),
-                        Cards = bot.Hand.Select(c => GetCardDataFromKonamiCode(c.Id)).ToArray()
+                        Cards = PadCardDataArray(bot.Hand, MAX_HAND_SIZE)
                     },
                     Field = new
                     {
@@ -791,12 +852,12 @@ namespace WindBot.Game.AI.Decks
                     Graveyard = new
                     {
                         CardsInGrave = GetNormalizedValue(bot.Graveyard.Count, 100),
-                        Cards = bot.Graveyard.Select(c => GetCardDataFromKonamiCode(c.Id)).ToArray()
+                        Cards = PadCardDataArray(bot.Graveyard, MAX_GRAVEYARD_SIZE)
                     },
                     Banished = new
                     {
                         CardsBanished = GetNormalizedValue(bot.Banished.Count, 100),
-                        Cards = bot.Banished.Select(c => GetCardDataFromKonamiCode(c.Id)).ToArray()
+                        Cards = PadCardDataArray(bot.Banished, MAX_BANISHED_SIZE)
                     },
                 },
                 Enemy = new
@@ -840,21 +901,21 @@ namespace WindBot.Game.AI.Decks
                     Graveyard = new
                     {
                         CardsInGrave = GetNormalizedValue(enemy.Graveyard.Count, 100),
-                        Cards = enemy.Graveyard.Select(c => GetCardDataFromKonamiCode(c.Id)).ToArray()
+                        Cards = PadCardDataArray(enemy.Graveyard, MAX_GRAVEYARD_SIZE)
                     },
                     Banished = new
                     {
                         CardsBanished = GetNormalizedValue(enemy.Banished.Count, 100),
-                        Cards = enemy.Banished.Select(c => GetCardDataFromKonamiCode(c.Id)).ToArray()
+                        Cards = PadCardDataArray(enemy.Banished, MAX_BANISHED_SIZE)
                     },
                 },
                 CurrentChain = new
                 {
                     ChainCount = GetNormalizedValue(Duel.CurrentChain.Count, 20),
                     Duel.LastChainPlayer,
-                    CurrentChain = Duel.CurrentChain.Select(c => GetCardDataFromKonamiCode(c.Id)).ToArray(),
-                    ChainTargets = Duel.ChainTargets.Select(c => GetCardDataFromKonamiCode(c.Id)).ToArray(),
-                    ChainTargetOnly = Duel.ChainTargetOnly.Select(c => GetCardDataFromKonamiCode(c.Id)).ToArray()
+                    CurrentChain = PadCardDataArray(Duel.CurrentChain, MAX_CURRENT_CHAIN),
+                    ChainTargets = PadCardDataArray(Duel.ChainTargets, MAX_CHAIN_TARGETS),
+                    ChainTargetOnly = PadCardDataArray(Duel.ChainTargetOnly, MAX_CHAIN_TARGET_ONLY)
                 },
                 AvailableOptions = new
                 {
@@ -874,12 +935,7 @@ namespace WindBot.Game.AI.Decks
                     CardData = new
                     {
                         Count = cardData?.Cards.Count ?? 0,
-                        Options = Enumerable.Range(0, cardData?.Cards.Count ?? 0).Select(i => new
-                        {
-                            Index = i,
-                            BaseCardData = GetCardDataFromKonamiCode(cardData?.Cards[i].Id ?? -1),
-                            Location = (int)cardData?.Cards[i].Location,
-                        }),
+                        Options = PadCardSelectionOptions(cardData?.Cards, MAX_CARD_SELECTION_OPTIONS),
                         Min = cardData?.Min ?? 0,
                         Max = cardData?.Max ?? 0,
                         Hint = cardData?.Hint ?? 0,
@@ -888,11 +944,7 @@ namespace WindBot.Game.AI.Decks
                     ChainData = new
                     {
                         Count = chainData?.Cards.Count ?? 0,
-                        Options = Enumerable.Range(0, chainData?.Cards.Count ?? 0).Select(i => new
-                        {
-                            Index = i,
-                            BaseCardData = GetCardDataFromKonamiCode(chainData?.Cards[i]?.Id ?? -1)
-                        }),
+                        Options = PadChainSelectionOptions(chainData?.Cards, MAX_CHAIN_SELECTION_OPTIONS),
                         Forced = chainData?.Forced ?? false
                     },
                     YesNoData = new
@@ -907,7 +959,7 @@ namespace WindBot.Game.AI.Decks
                     PositionData = new
                     {
                         CardId = GetCardDataFromKonamiCode(positionData?.CardId ?? -1),
-                        Positions = positionData?.Positions.Select(p => (int)p).ToArray()
+                        Positions = PadPositionArray(positionData?.Positions, 5) // Assuming max 5 position options
                     }
                 }
             };
@@ -916,19 +968,79 @@ namespace WindBot.Game.AI.Decks
             string json = JsonConvert.SerializeObject(gameStateInput, Formatting.Indented);
             Console.WriteLine(json);
 
-            //gameState[0] = Duel.Turn; // Current turn number
-            //gameState[1] = (Duel.Turn % 2 == (Duel.IsFirst ? 1 : 0)) ? 0 : 1; // Current turn player. 0 for bot, 1 for enemy
-            //gameState[2] = (int)Duel.Phase; // Current phase
-            //gameState[3] = 0;//(int)CurrentDecision; // Current decision
-            //gameState[4] = 0;//(int)MasterRule; // Master Rule
-
-            //// Bot
-            //gameState[5] = bot.LifePoints; // Bot life points
-            //gameState[6] = bot.Deck.Count; // Bot deck count
-            //gameState[7] = 0; // has normal summoned
-            //gameState[9] = 0; // Special summon count
-
             return json;
+        }
+
+        // Helper method to pad card selection options
+        private object[] PadCardSelectionOptions(IList<ClientCard> cards, int maxSize)
+        {
+            var result = new object[maxSize];
+            for (int i = 0; i < maxSize; i++)
+            {
+                if (cards != null && i < cards.Count)
+                {
+                    result[i] = new
+                    {
+                        Index = i,
+                        BaseCardData = GetCardDataFromKonamiCode(cards[i].Id),
+                        Location = (int)cards[i].Location,
+                    };
+                }
+                else
+                {
+                    result[i] = new
+                    {
+                        Index = -1,
+                        BaseCardData = GetCardDataFromKonamiCode(0),
+                        Location = -1,
+                    };
+                }
+            }
+            return result;
+        }
+
+        // Helper method to pad chain selection options
+        private object[] PadChainSelectionOptions(IList<ClientCard> cards, int maxSize)
+        {
+            var result = new object[maxSize];
+            for (int i = 0; i < maxSize; i++)
+            {
+                if (cards != null && i < cards.Count)
+                {
+                    result[i] = new
+                    {
+                        Index = i,
+                        BaseCardData = GetCardDataFromKonamiCode(cards[i].Id)
+                    };
+                }
+                else
+                {
+                    result[i] = new
+                    {
+                        Index = -1,
+                        BaseCardData = GetCardDataFromKonamiCode(0)
+                    };
+                }
+            }
+            return result;
+        }
+
+        // Helper method to pad position arrays
+        private int[] PadPositionArray(IList<CardPosition> positions, int maxSize)
+        {
+            var result = new int[maxSize];
+            for (int i = 0; i < maxSize; i++)
+            {
+                if (positions != null && i < positions.Count)
+                {
+                    result[i] = (int)positions[i];
+                }
+                else
+                {
+                    result[i] = -1; // Use -1 to indicate empty position
+                }
+            }
+            return result;
         }
 
         private bool IsBotsTurn()
