@@ -382,6 +382,22 @@ namespace WindBot.Game
                 else
                     _ai.OnDeckError("DECK");
             }
+            if (msg == 5) // ERRMSG_VERSIONERROR
+            {
+                var remaining = packet.ReadToEnd();
+
+                // Try to parse expected version from the last 4 bytes (LE)
+                if (remaining.Length >= 1)
+                {
+                    uint expected = BitConverter.ToUInt32(remaining, remaining.Length - 4);
+                    int major = (int)(expected & 0xFF);
+                    int minor = (int)((expected >> 8) & 0xFF);
+                    int patch = (int)((expected >> 16) & 0xFF);
+
+                    Logger.DebugWriteLine($"Server expects version: {major}.{minor}.{patch} (0x{expected:X8})");
+                }
+            }
+
             Connection.Close();
         }
 

@@ -14,6 +14,7 @@ using System.Text.RegularExpressions;
 using YGOSharp.Network.Enums;
 using YGOSharp.OCGWrapper;
 using YGOSharp.OCGWrapper.Enums;
+using static WindBot.Game.AI.Decks.TearlamentsExecutor;
 
 namespace WindBot.Game.AI.Decks
 {
@@ -517,70 +518,82 @@ namespace WindBot.Game.AI.Decks
             var selectCardData = new SelectCardData { Cards = cards, Min = min, Max = max, Hint = hint, Cancelable = cancelable };
             var gamestate = GetGameState(GameMessage.SelectCard, cardData: selectCardData);
 
-            IList<ClientCard> selectedCards = new List<ClientCard>();
+            var validGroups = new Dictionary<char, int> { { 'i', cards.Count } };
+            var selectedCards = new List<ClientCard>();
+            var chosenIndices = new HashSet<int>();
 
+            // Collect mandatory minimum
+            while (selectedCards.Count < min)
+            {
+                int idx = RequestUniqueIndexFromBot(gamestate, validGroups, cards.Count, chosenIndices);
+                chosenIndices.Add(idx);
+                selectedCards.Add(cards[idx]);
+            }
+
+            // Optionally continue up to max
+            while (selectedCards.Count < max && OnSelectYesNo(hint))
+            {
+                int idx = RequestUniqueIndexFromBot(gamestate, validGroups, cards.Count, chosenIndices);
+                chosenIndices.Add(idx);
+                selectedCards.Add(cards[idx]);
+            }
+
+            return selectedCards;
+        }
+
+        private int RequestUniqueIndexFromBot(string gamestate, Dictionary<char, int> validGroups, int totalCards, HashSet<int> alreadyChosen)
+        {
             while (true)
             {
                 try
                 {
                     string response = GetInferenceResult(gamestate);
 
-                    if (!IsValidCardSelection(response, cards.Count, min, max, out IList<int> selectedIndices))
-                        throw new FormatException("Invalid selection. Please enter a valid comma-separated list of indices.");
+                    if (!TryParseAction(response, validGroups, out _, out int index))
+                        throw new FormatException("Input must be a valid action (e.g., 'i3').");
 
-                    foreach (var i in selectedIndices)
-                        selectedCards.Add(cards[i]);
+                    if (index < 0 || index >= totalCards)
+                        throw new FormatException($"Index out of range. Must be between 0 and {totalCards - 1}.");
 
-                    break;
+                    if (alreadyChosen.Contains(index))
+                        throw new FormatException("Duplicate index selected. Choose a different card.");
+
+                    return index;
                 }
                 catch (FormatException ex)
                 {
                     Console.WriteLine($"{ex.Message} Please try again.");
                 }
             }
-
-            return selectedCards;
         }
 
-        private bool IsValidCardSelection(string response, int totalCards, int min, int max, out IList<int> selectedIndices)
-        {
-            selectedIndices = new List<int>();
-
-            string[] parts = response.Split(',');
-
-            if (parts.Length < min || parts.Length > max)
-                return false;
-
-            foreach (var part in parts)
-            {
-                if (int.TryParse(part.Trim(), out int index) && index >= 0 && index < totalCards)
-                {
-                    if (!selectedIndices.Contains(index))
-                        selectedIndices.Add(index);
-                }
-                else
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
 
         public override bool OnSelectYesNo(long desc)
         {
             var selectYesNoData = new SelectYesNoData() { Desc = desc };
             var gamestate = GetGameState(GameMessage.SelectYesNo, yesNoData: selectYesNoData);
 
+            int index;
+            var validGroups = new Dictionary<char, int> {{ 'i', 2}}; // 0 for no, 1 for yes
             while (true)
             {
-                string response = GetInferenceResult(gamestate);
-                if (response.Equals("y", StringComparison.OrdinalIgnoreCase))
-                    return true;
-                else if (response.Equals("n", StringComparison.OrdinalIgnoreCase))
-                    return false;
-                else
-                    Console.WriteLine("Invalid input. Please enter 'y' for Yes or 'n' for No.");
+                try
+                {
+                    string response = GetInferenceResult(gamestate);
+                    if (!TryParseAction(response, validGroups, out _, out index))
+                        throw new FormatException("Input must be a valid action (e.g., 'b2', 'a1').");
+
+                    if (index == 1)
+                        return true;
+                    else if (index == 0)
+                        return false;
+                    else
+                        throw new ArgumentException("Invalid input. Please enter '0' for No or '1' for Yes.");
+                }
+                catch (FormatException ex)
+                {
+                    Console.WriteLine($"Invalid input. {ex.Message} Please try again.");
+                }
             }
         }
 
@@ -589,15 +602,27 @@ namespace WindBot.Game.AI.Decks
             var selectEffYesNoData = new SelectEffectYesNoData() { Card = card, Desc = desc };
             var gamestate = GetGameState(GameMessage.SelectEffectYn, effectYesNoData: selectEffYesNoData);
 
+            int index;
+            var validGroups = new Dictionary<char, int> { { 'i', 2 } }; // 0 for no, 1 for yes
             while (true)
             {
-                string response = GetInferenceResult(gamestate);
-                if (response.Equals("y", StringComparison.OrdinalIgnoreCase))
-                    return true;
-                else if (response.Equals("n", StringComparison.OrdinalIgnoreCase))
-                    return false;
-                else
-                    Console.WriteLine("Invalid input. Please enter 'y' for Yes or 'n' for No.");
+                try
+                {
+                    string response = GetInferenceResult(gamestate);
+                    if (!TryParseAction(response, validGroups, out _, out index))
+                        throw new FormatException("Input must be a valid action (e.g., 'b2', 'a1').");
+
+                    if (index == 1)
+                        return true;
+                    else if (index == 0)
+                        return false;
+                    else
+                        throw new ArgumentException("Please enter '0' for No or '1' for Yes.");
+                }
+                catch (FormatException ex)
+                {
+                    Console.WriteLine($"Invalid input. {ex.Message} Please try again.");
+                }
             }
         }
 
@@ -606,21 +631,21 @@ namespace WindBot.Game.AI.Decks
             var chainCardData = new SelectChainData() { Cards = cards, Forced = forced };
             var gamestate = GetGameState(GameMessage.SelectChain, chainData: chainCardData);
 
+            int index;
+            var validGroups = new Dictionary<char, int> { { 'i', cards.Count } };
             while (true)
             {
                 try
                 {
                     string response = GetInferenceResult(gamestate);
-                    int index = int.Parse(response);
+                    if (!TryParseAction(response, validGroups, out _, out index))
+                        throw new FormatException("Input must be a valid action (e.g., 'b2', 'a1').");
 
-                    if ((index >= 0 && index < cards.Count) || index == -1)
-                        return index;
-                    else
-                        Console.WriteLine("Invalid index. Please try again.");
+                    return index - 1; // Adjusting index to match game logic (0 for no chain, 1+ for card index)
                 }
-                catch (FormatException)
+                catch (FormatException ex)
                 {
-                    Console.WriteLine("Invalid input. Please enter a valid number.");
+                    Console.WriteLine($"Invalid input. {ex.Message} Please try again.");
                 }
             }
         }
@@ -630,21 +655,21 @@ namespace WindBot.Game.AI.Decks
             var positionData = new SelectPositionData() { CardId = cardId, Positions = positions };
             var gamestate = GetGameState(GameMessage.SelectPosition, positionData: positionData);
 
+            int index;
+            var validGroups = new Dictionary<char, int> { { 'i', positions.Count } };
             while (true)
             {
                 try
                 {
                     string response = GetInferenceResult(gamestate);
-                    int posIndex = int.Parse(response);
+                    if (!TryParseAction(response, validGroups, out _, out index))
+                        throw new FormatException("Input must be a valid action (e.g., 'b2', 'a1').");
 
-                    if (posIndex >= 0 && posIndex < positions.Count)
-                        return positions[posIndex];
-                    else
-                        Console.WriteLine("Invalid index. Please try again.");
+                    return positions[index];
                 }
-                catch (FormatException)
+                catch (FormatException ex)
                 {
-                    Console.WriteLine("Invalid input. Please enter a valid number.");
+                    Console.WriteLine($"Invalid input. {ex.Message} Please try again.");
                 }
             }
         }
