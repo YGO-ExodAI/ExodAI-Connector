@@ -739,34 +739,26 @@ namespace WindBot.Game.AI.Decks
             }
         }
 
-        // Helper method to pad arrays of card data
-        private int[][] PadCardDataArray(IEnumerable<ClientCard> cards, int maxSize)
+        private static readonly int[] EmptyIntArray = new int[0];
+
+        private int[] PadCardIdArray(IEnumerable<ClientCard> cards, int maxSize)
         {
-            var cardArray = cards?.Select(c => GetCardDataFromKonamiCode(c.Id)).ToArray() ?? new int[0][];
-            return PadCardDataArray(cardArray, maxSize);
+            var cardArray = (cards != null) ? cards.Select(c => c.Id).ToArray() : EmptyIntArray;
+            return PadCardIdArray(cardArray, maxSize);
         }
 
-        private int[][] PadCardDataArray(IEnumerable<int> cardIds, int maxSize)
+        private int[] PadCardDataArray(IEnumerable<int> cardIds, int maxSize)
         {
-            var cardArray = cardIds?.Select(id => GetCardDataFromKonamiCode(id)).ToArray() ?? new int[0][];
-            return PadCardDataArray(cardArray, maxSize);
+            var cardArray = cardIds?.ToArray() ?? EmptyIntArray;
+            return PadCardIdArray(cardArray, maxSize);
         }
 
-        private int[][] PadCardDataArray(int[][] cardArray, int maxSize)
+        private int[] PadCardIdArray(int[] arr, int maxSize)
         {
-            var result = new int[maxSize][];
-            for (int i = 0; i < maxSize; i++)
-            {
-                if (i < cardArray.Length)
-                {
-                    result[i] = cardArray[i];
-                }
-                else
-                {
-                    // Pad with empty card data (array of zeros)
-                    result[i] = GetCardDataFromKonamiCode(0);
-                }
-            }
+            var result = new int[maxSize];
+            int n = Math.Min(arr.Length, maxSize);
+            for (int i = 0; i < n; i++) result[i] = arr[i];
+            // remaining entries are 0 (meaning empty)
             return result;
         }
 
@@ -789,7 +781,7 @@ namespace WindBot.Game.AI.Decks
                 {
                     feats[i] = new
                     {
-                        BaseCardData = GetCardDataFromKonamiCode(cards[i].Id),
+                        BaseCardData = cards[i].Id,
                         Location = OneHotEncodeLocation(cards[i].Location, locationMatters: withLoc)
                     };
                 }
@@ -798,7 +790,7 @@ namespace WindBot.Game.AI.Decks
                     // Pad with empty data
                     feats[i] = new
                     {
-                        BaseCardData = GetCardDataFromKonamiCode(0),
+                        BaseCardData = 0,
                         Location = OneHotEncodeLocation(CardLocation.Deck, locationMatters: withLoc)
                     };
                 }
@@ -830,8 +822,8 @@ namespace WindBot.Game.AI.Decks
                     CurrentTurnPlayer = GetBoolAsIntValue(IsBotsTurn()),
                     GameState = GetOneHotGameMessage(currentGameState),
                     Duel.LastSummonPlayer,
-                    SummoningCards = PadCardDataArray(Duel.SummoningCards, MAX_SUMMONING_CARDS),
-                    LastSummonedCards = PadCardDataArray(Duel.LastSummonedCards, MAX_LAST_SUMMONED_CARDS),
+                    SummoningCards = PadCardIdArray(Duel.SummoningCards, MAX_SUMMONING_CARDS),
+                    LastSummonedCards = PadCardIdArray(Duel.LastSummonedCards, MAX_LAST_SUMMONED_CARDS),
                     ActivatedCardsThisTurn = cardsActivatedThisTurn,
                 },
                 Bot = new
@@ -846,14 +838,14 @@ namespace WindBot.Game.AI.Decks
                     Hand = new
                     {
                         CardsInHand = GetNormalizedValue(bot.Hand.Count, 100),
-                        Cards = PadCardDataArray(bot.Hand, MAX_HAND_SIZE)
+                        Cards = PadCardIdArray(bot.Hand, MAX_HAND_SIZE)
                     },
                     Field = new
                     {
                         MonsterZone = Enumerable.Range(0, 5).Select(i => new
                         {
                             Occupied = GetBoolAsIntValue(bot.MonsterZone[i] != null),
-                            BaseCardData = GetCardDataFromKonamiCode(bot.MonsterZone[i]?.Id ?? 0),
+                            BaseCardData = bot.MonsterZone[i]?.Id ?? 0,
                             CurrAttack = GetNormalizedValue(bot.MonsterZone[i]?.Attack ?? 0, 8000),
                             CurrDefense = GetNormalizedValue(bot.MonsterZone[i]?.Defense ?? 0, 8000),
                             IsFaceup = GetBoolAsIntValue(bot.MonsterZone[i]?.IsFaceup() ?? false),
@@ -867,7 +859,7 @@ namespace WindBot.Game.AI.Decks
                         Backrow = Enumerable.Range(0, 5).Select(i => new
                         {
                             Occupied = GetBoolAsIntValue(bot.SpellZone[i] != null),
-                            BaseCardData = GetCardDataFromKonamiCode(bot.SpellZone[i]?.Id ?? 0),
+                            BaseCardData = bot.SpellZone[i]?.Id ?? 0,
                             IsFaceup = GetBoolAsIntValue(bot.SpellZone[i]?.IsFaceup() ?? false),
                             Position = OneHotEncodePosition((int)(bot.SpellZone[i]?.Position ?? 0)),
                             Owner = bot.SpellZone[i]?.Owner ?? 0,
@@ -877,12 +869,12 @@ namespace WindBot.Game.AI.Decks
                     Graveyard = new
                     {
                         CardsInGrave = GetNormalizedValue(bot.Graveyard.Count, 100),
-                        Cards = PadCardDataArray(bot.Graveyard, MAX_GRAVEYARD_SIZE)
+                        Cards = PadCardIdArray(bot.Graveyard, MAX_GRAVEYARD_SIZE)
                     },
                     Banished = new
                     {
                         CardsBanished = GetNormalizedValue(bot.Banished.Count, 100),
-                        Cards = PadCardDataArray(bot.Banished, MAX_BANISHED_SIZE)
+                        Cards = PadCardIdArray(bot.Banished, MAX_BANISHED_SIZE)
                     },
                 },
                 Enemy = new
@@ -902,7 +894,7 @@ namespace WindBot.Game.AI.Decks
                         MonsterZone = Enumerable.Range(0, 5).Select(i => new
                         {
                             Occupied = GetBoolAsIntValue(enemy.MonsterZone[i] != null),
-                            BaseCardData = GetCardDataFromKonamiCode(enemy.MonsterZone[i]?.Id ?? 0),
+                            BaseCardData = enemy.MonsterZone[i]?.Id ?? 0,
                             CurrAttack = GetNormalizedValue(enemy.MonsterZone[i]?.Attack ?? 0, 8000),
                             CurrDefense = GetNormalizedValue(enemy.MonsterZone[i]?.Defense ?? 0, 8000),
                             IsFaceup = GetBoolAsIntValue(enemy.MonsterZone[i]?.IsFaceup() ?? false),
@@ -916,7 +908,7 @@ namespace WindBot.Game.AI.Decks
                         Backrow = Enumerable.Range(0, 5).Select(i => new
                         {
                             Occupied = GetBoolAsIntValue(enemy.SpellZone[i] != null),
-                            BaseCardData = GetCardDataFromKonamiCode(enemy.SpellZone[i]?.Id ?? 0),
+                            BaseCardData = enemy.SpellZone[i]?.Id ?? 0,
                             IsFaceup = GetBoolAsIntValue(enemy.SpellZone[i]?.IsFaceup() ?? false),
                             Position = OneHotEncodePosition((int)(enemy.SpellZone[i]?.Position ?? 0)),
                             Owner = enemy.SpellZone[i]?.Owner ?? 0,
@@ -926,21 +918,21 @@ namespace WindBot.Game.AI.Decks
                     Graveyard = new
                     {
                         CardsInGrave = GetNormalizedValue(enemy.Graveyard.Count, 100),
-                        Cards = PadCardDataArray(enemy.Graveyard, MAX_GRAVEYARD_SIZE)
+                        Cards = PadCardIdArray(enemy.Graveyard, MAX_GRAVEYARD_SIZE)
                     },
                     Banished = new
                     {
                         CardsBanished = GetNormalizedValue(enemy.Banished.Count, 100),
-                        Cards = PadCardDataArray(enemy.Banished, MAX_BANISHED_SIZE)
+                        Cards = PadCardIdArray(enemy.Banished, MAX_BANISHED_SIZE)
                     },
                 },
                 CurrentChain = new
                 {
                     ChainCount = GetNormalizedValue(Duel.CurrentChain.Count, 20),
                     Duel.LastChainPlayer,
-                    CurrentChain = PadCardDataArray(Duel.CurrentChain, MAX_CURRENT_CHAIN),
-                    ChainTargets = PadCardDataArray(Duel.ChainTargets, MAX_CHAIN_TARGETS),
-                    ChainTargetOnly = PadCardDataArray(Duel.ChainTargetOnly, MAX_CHAIN_TARGET_ONLY)
+                    CurrentChain = PadCardIdArray(Duel.CurrentChain, MAX_CURRENT_CHAIN),
+                    ChainTargets = PadCardIdArray(Duel.ChainTargets, MAX_CHAIN_TARGETS),
+                    ChainTargetOnly = PadCardIdArray(Duel.ChainTargetOnly, MAX_CHAIN_TARGET_ONLY)
                 },
                 AvailableOptions = new
                 {
@@ -978,12 +970,12 @@ namespace WindBot.Game.AI.Decks
                     },
                     EffectYesNoData = new
                     {
-                        CardId = GetCardDataFromKonamiCode(effectYesNoData?.Card?.Id ?? -1),
+                        CardId = effectYesNoData?.Card?.Id ?? -1,
                         Desc = effectYesNoData?.Desc ?? -1
                     },
                     PositionData = new
                     {
-                        CardId = GetCardDataFromKonamiCode(positionData?.CardId ?? -1),
+                        CardId = positionData?.CardId ?? -1,
                         Positions = PadPositionArray(positionData?.Positions, 5) // Assuming max 5 position options
                     }
                 }
@@ -1007,7 +999,7 @@ namespace WindBot.Game.AI.Decks
                     result[i] = new
                     {
                         Index = i,
-                        BaseCardData = GetCardDataFromKonamiCode(cards[i].Id),
+                        BaseCardData = cards[i].Id,
                         Location = (int)cards[i].Location,
                     };
                 }
@@ -1016,7 +1008,7 @@ namespace WindBot.Game.AI.Decks
                     result[i] = new
                     {
                         Index = -1,
-                        BaseCardData = GetCardDataFromKonamiCode(0),
+                        BaseCardData = 0,
                         Location = -1,
                     };
                 }
@@ -1035,7 +1027,7 @@ namespace WindBot.Game.AI.Decks
                     result[i] = new
                     {
                         Index = i,
-                        BaseCardData = GetCardDataFromKonamiCode(cards[i].Id)
+                        BaseCardData = cards[i].Id
                     };
                 }
                 else
@@ -1043,7 +1035,7 @@ namespace WindBot.Game.AI.Decks
                     result[i] = new
                     {
                         Index = -1,
-                        BaseCardData = GetCardDataFromKonamiCode(0)
+                        BaseCardData = 0
                     };
                 }
             }
@@ -1085,51 +1077,9 @@ namespace WindBot.Game.AI.Decks
             return attribute?.File ?? "DefaultDeckName";
         }
 
-        private int[] GetCardDataFromKonamiCode(int konamiCode)
+        private int GetCardId(int konamiCode)
         {
-            // The Konami‑codes for each of your 19 cards, in deck order:
-            int[] codes = new int[]
-            {
-                70781052,  // Summoned Skull
-                97590747,  // La Jinn the Mystical Genie of the Lamp :contentReference[oaicite:0]{index=0}
-                5053103,   // Battle Ox
-                50930991,  // Neo the Magic Swordsman :contentReference[oaicite:1]{index=1}
-                13945283,  // Wall of Illusion :contentReference[oaicite:2]{index=2}
-                46461247,  // Trap Master :contentReference[oaicite:3]{index=3}
-                54652250,  // Man‑Eater Bug
-                4031928,   // Change of Heart
-                12580477,  // Raigeki
-                19159413,  // De‑Spell
-                53129443,  // Dark Hole
-                55144522,  // Pot of Greed
-                66788016,  // Fissure
-                15735108,  // Soul Exchange :contentReference[oaicite:4]{index=4}
-                72302403,  // Swords of Revealing Light
-                83764718,  // Monster Reborn
-                4206964,   // Trap Hole
-                12607053,  // Waboku :contentReference[oaicite:5]{index=5}
-                17814387   // Reinforcements :contentReference[oaicite:6]{index=6}
-            };
-
-            var oneHot = new int[codes.Length];
-            for (int i = 0; i < codes.Length; i++)
-            {
-                if (codes[i] == konamiCode)
-                {
-                    oneHot[i] = 1;
-                    break;
-                }
-            }
-
-            return oneHot;
-
-            // Use when eventually migrating to embedding the effects
-            //if (baseCardData.ContainsKey(konamiCode))
-            //{
-            //    return new BaseCardDataDTO(baseCardData[konamiCode]);
-            //}
-
-            //return null;
+            return konamiCode;
         }
 
         private int[] OneHotEncodeLocation(CardLocation location, bool locationMatters = true)
