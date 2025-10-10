@@ -99,6 +99,11 @@ namespace WindBot.Game
             return _executor.OnSelectHand();
         }
 
+        public void OnWin(string textResult)
+        {
+            _executor.OnGameEnd(textResult);
+        }
+
         /// <summary>
         /// Called when any player draw card.
         /// </summary>

@@ -92,8 +92,8 @@ namespace WindBot.Game
             if (id == StocMessage.GameMsg)
             {
                 GameMessage msg = (GameMessage)packet.ReadByte();
-                if (msg != GameMessage.UpdateData)
-                    Console.WriteLine("Game message: " + msg.ToString());
+                //if (msg != GameMessage.UpdateData)
+                //    Console.WriteLine("Game message: " + msg.ToString());
                 if (_messages.ContainsKey(msg))
                     _messages[msg](packet);
                 _lastMessage = msg;
@@ -460,6 +460,7 @@ namespace WindBot.Game
             Logger.DebugWriteLine("Duel finished against " + otherName + ", result: " + textResult);
             stopwatch.Stop();
             Logger.DebugWriteLine($"Game duration: {stopwatch.ElapsedMilliseconds} ms");
+            _ai.OnWin(textResult);
         }
 
         private void OnDraw(BinaryReader packet)
@@ -711,9 +712,9 @@ namespace WindBot.Game
             // TODO: update equip cards and target cards
             int cardId = packet.ReadInt32();
             LocationInfo previous = new LocationInfo(packet, _duel.IsFirst);
-            Logger.WriteLine($"Previous location: {(CardLocation)previous.location} slot {previous.position}");
+            //Logger.WriteLine($"Previous location: {(CardLocation)previous.location} slot {previous.position}");
             LocationInfo current = new LocationInfo(packet, _duel.IsFirst);
-            Logger.WriteLine($"New location: {(CardLocation)current.location} slot {current.position}");
+            //Logger.WriteLine($"New location: {(CardLocation)current.location} slot {current.position}");
             int reason = packet.ReadInt32(); // reason
 
             ClientCard card = _duel.GetCard(previous.controller, (CardLocation)previous.location, previous.sequence);

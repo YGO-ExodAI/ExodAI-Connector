@@ -51,6 +51,11 @@ namespace WindBot.Game.AI.Decks
         public bool Cancelable;
     }
 
+    public class SelectOptionData
+    {
+        public IList<long> Options;
+    }
+
     public class BaseCardData
     {
         [JsonPropertyName("cleanName")]
@@ -217,20 +222,12 @@ namespace WindBot.Game.AI.Decks
 
         private bool pendingCardDraw;
         private int cardsDrawn;
+        private Guid matchId;
+        private int playerSlot; // 0 if we went first, 1 if we went second
+        private int stepCount;
 
-        // Constants for maximum sizes
-        private const int MAX_DECK_SIZE = 40;
-        private const int MAX_HAND_SIZE = 12;
-        private const int MAX_GRAVEYARD_SIZE = 40;
-        private const int MAX_BANISHED_SIZE = 40;
-        private const int MAX_SUMMONING_CARDS = 3;
-        private const int MAX_LAST_SUMMONED_CARDS = 3;
-        private const int MAX_CURRENT_CHAIN = 5;
-        private const int MAX_CHAIN_TARGETS = 5;
-        private const int MAX_CHAIN_TARGET_ONLY = 5;
-        private const int MAX_OPTIONS = 20;
-        private const int MAX_CARD_SELECTION_OPTIONS = 20;
-        private const int MAX_CHAIN_SELECTION_OPTIONS = 10;
+        // Constants
+        private const string MODEL_TAG = "ExodAI_Condensed";
 
         public ExodAIExecutor(GameAI ai, Duel duel) : base(ai, duel)
         {
@@ -288,7 +285,61 @@ namespace WindBot.Game.AI.Decks
         public override void OnStartDuel()
         {
             currentDecklist = masterDecklist.ToList();
+            matchId = Guid.NewGuid();
+            playerSlot = Duel.IsFirst ? 0 : 1;
+            stepCount = 0;
         }
+
+        public override void OnGameEnd(string textResult, bool gameError = false)
+        {
+            textResult = textResult.ToLower();
+            int reward = textResult == "win" ? 1 : textResult == "loss" ? -1 : 0;
+
+            int? winnerSlot = null;
+            if (textResult == "win") winnerSlot = playerSlot;
+            else if (textResult == "loss") winnerSlot = 1 - playerSlot;
+
+            var payload = new
+            {
+                match_id = matchId,
+                player_slot = playerSlot,             // 0 or 1
+                went_first = Duel.IsFirst,
+                our_result = textResult,        // "win" | "loss" | "draw"
+                winner_slot = winnerSlot,             // null for draw
+                reward,                                // +1 / 0 / -1
+                turns = Duel.Turn,
+                bot_lp_final = Util.Bot.LifePoints, 
+                enemy_lp_final = Util.Enemy.LifePoints,
+                timestamp_utc = DateTime.UtcNow,
+                model = new
+                {
+                    tag = MODEL_TAG,
+                },
+                Error = gameError
+            };
+
+            string json = JsonConvert.SerializeObject(
+                payload,
+                Formatting.Indented,
+                new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }
+            );
+            Console.WriteLine(json);
+
+            try
+            {
+                using (HttpClient client = new HttpClient())
+                {
+                    var content = new StringContent(json, Encoding.UTF8, "application/json");
+                    var response = client.PostAsync("http://localhost:8000/gameResult", content).Result;
+                    Console.WriteLine($"Status Code: {response.StatusCode}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Failed to POST gameResult: " + ex.Message);
+            }
+        }
+
 
         public override void OnNewTurn()
         {
@@ -297,7 +348,7 @@ namespace WindBot.Game.AI.Decks
 
         public override void OnDraw(int player, int count)
         {
-            Console.WriteLine($"Player {player} drew {count} cards");
+            //Console.WriteLine($"Player {player} drew {count} cards");
             if (player != 0)
             {
                 return;
@@ -322,11 +373,11 @@ namespace WindBot.Game.AI.Decks
 
                 foreach (var card in drawnCards)
                 {
-                    Console.WriteLine($"Card {card} was drawn");
+                    //Console.WriteLine($"Card {card} was drawn");
                     currentDecklist.Remove(card.Id);
                 }
 
-                Console.WriteLine($"Cards left in deck: {currentDecklist.Count}");
+                //Console.WriteLine($"Cards left in deck: {currentDecklist.Count}");
                 pendingCardDraw = false;
             }
         }
@@ -341,18 +392,18 @@ namespace WindBot.Game.AI.Decks
             // If the card is leaving the deck, we need to update our deck list to reflect the change
             if (sourceController == 0 && source == CardLocation.Deck)
             {
-                Console.WriteLine($"Card {cardId} was removed from my deck");
+                //Console.WriteLine($"Card {cardId} was removed from my deck");
                 currentDecklist.Remove(cardId);
             }
 
             // If the card is entering the deck, we need to update our deck list to reflect the change
             else if (destController == 0 && dest == CardLocation.Deck)
             {
-                Console.WriteLine($"Card {cardId} was added to my deck");
+                //Console.WriteLine($"Card {cardId} was added to my deck");
                 currentDecklist.Add(cardId);
             }
 
-            Console.WriteLine($"Cards left in deck: {currentDecklist.Count}");
+            //Console.WriteLine($"Cards left in deck: {currentDecklist.Count}");
         }
 
         public override void OnActivateCard(Dictionary<int, int> activatedCards)
@@ -640,8 +691,34 @@ namespace WindBot.Game.AI.Decks
                     string response = GetInferenceResult(gamestate);
                     if (!TryParseAction(response, validGroups, out _, out index))
                         throw new FormatException("Input must be a valid action (e.g., 'b2', 'a1').");
-
+                    if (index < 0 || index >= cards.Count)
+                        throw new FormatException($"Index out of range. Must be between 0 and {cards.Count - 1}.");
                     return index - 1; // Adjusting index to match game logic (0 for no chain, 1+ for card index)
+                }
+                catch (FormatException ex)
+                {
+                    Console.WriteLine($"Invalid input. {ex.Message} Please try again.");
+                }
+            }
+        }
+
+        public override int OnSelectOption(IList<long> options)
+        {
+            var selectOptionData = new SelectOptionData() { Options = options };
+            var gamestate = GetGameState(GameMessage.SelectOption, optionData: selectOptionData);
+
+            int index;
+            var validGroups = new Dictionary<char, int> { { 'i', options.Count } };
+            while (true)
+            {
+                try
+                {
+                    string response = GetInferenceResult(gamestate);
+                    if (!TryParseAction(response, validGroups, out _, out index))
+                        throw new FormatException("Input must be a valid action (e.g., 'b2', 'a1').");
+                    if (index < 0 || index >= options.Count)
+                        throw new FormatException($"Index out of range. Must be between 0 and {options.Count - 1}.");
+                    return index; // Return the selected option index
                 }
                 catch (FormatException ex)
                 {
@@ -741,208 +818,128 @@ namespace WindBot.Game.AI.Decks
 
         private static readonly int[] EmptyIntArray = new int[0];
 
-        private int[] PadCardIdArray(IEnumerable<ClientCard> cards, int maxSize)
-        {
-            var cardArray = (cards != null) ? cards.Select(c => c.Id).ToArray() : EmptyIntArray;
-            return PadCardIdArray(cardArray, maxSize);
-        }
-
-        private int[] PadCardDataArray(IEnumerable<int> cardIds, int maxSize)
-        {
-            var cardArray = cardIds?.ToArray() ?? EmptyIntArray;
-            return PadCardIdArray(cardArray, maxSize);
-        }
-
-        private int[] PadCardIdArray(int[] arr, int maxSize)
-        {
-            var result = new int[maxSize];
-            int n = Math.Min(arr.Length, maxSize);
-            for (int i = 0; i < n; i++) result[i] = arr[i];
-            // remaining entries are 0 (meaning empty)
-            return result;
-        }
-
-        private object BuildOptionGroup(IList<ClientCard> cards,
-                               int padTo = MAX_OPTIONS,
-                               bool withLoc = false)
-        {
-            cards ??= Array.Empty<ClientCard>();
-
-            // fixed-size mask (pad with zeros so every sample has the same length)
-            var mask = Enumerable.Range(0, padTo)
-                                  .Select(i => i < cards.Count ? 1 : 0)
-                                  .ToArray();
-
-            // align option features to mask order
-            var feats = new object[padTo];
-            for (int i = 0; i < padTo; i++)
-            {
-                if (i < cards.Count)
-                {
-                    feats[i] = new
-                    {
-                        BaseCardData = cards[i].Id,
-                        Location = OneHotEncodeLocation(cards[i].Location, locationMatters: withLoc)
-                    };
-                }
-                else
-                {
-                    // Pad with empty data
-                    feats[i] = new
-                    {
-                        BaseCardData = 0,
-                        Location = OneHotEncodeLocation(CardLocation.Deck, locationMatters: withLoc)
-                    };
-                }
-            }
-
-            return new
-            {
-                Count = cards.Count,
-                Mask = mask,
-                Cards = feats
-            };
-        }
-
+        private static readonly long[] EmptyLongArray = new long[0];
 
         public string GetGameState(GameMessage currentGameState,
             SelectCardData cardData = null, SelectChainData chainData = null,
             SelectYesNoData yesNoData = null, SelectEffectYesNoData effectYesNoData = null,
-            SelectPositionData positionData = null)
+            SelectPositionData positionData = null, SelectOptionData optionData = null)
         {
+            Console.WriteLine("Generating game state for state: " + currentGameState);
             var bot = Util.Bot;
             var enemy = Util.Enemy;
 
             var gameStateInput = new
             {
-                DuelMetadata = new
+                MetaInformation = new
                 {
-                    TurnNumber = GetNormalizedValue(Duel.Turn, 100),
-                    Phase = GetOneHotPhase(Duel.Phase),
-                    CurrentTurnPlayer = GetBoolAsIntValue(IsBotsTurn()),
-                    GameState = GetOneHotGameMessage(currentGameState),
-                    Duel.LastSummonPlayer,
-                    SummoningCards = PadCardIdArray(Duel.SummoningCards, MAX_SUMMONING_CARDS),
-                    LastSummonedCards = PadCardIdArray(Duel.LastSummonedCards, MAX_LAST_SUMMONED_CARDS),
-                    ActivatedCardsThisTurn = cardsActivatedThisTurn,
+                    MatchId = matchId,
+                    PlayerSlot = playerSlot,
+                    ModelTag = "MODEL_TAG",
+                    StepCount = stepCount++,
+                    SentAtUtc = DateTime.UtcNow
                 },
-                Bot = new
+                State = new
                 {
-                    Lifepoints = GetNormalizedValue(bot.LifePoints, 8000),
-                    UnderAttack = GetBoolAsIntValue(bot.UnderAttack),
-                    Deck = new
+                    DuelMetadata = new
                     {
-                        CardsInDeck = GetNormalizedValue(bot.Deck.Count, 100),
-                        Cards = PadCardDataArray(currentDecklist, MAX_DECK_SIZE)
+                        TurnNumber = GetNormalizedValue(Duel.Turn, 100),
+                        Phase = GetOneHotPhase(Duel.Phase),
+                        CurrentTurnPlayer = GetBoolAsIntValue(IsBotsTurn()),
+                        GameState = GetOneHotGameMessage(currentGameState),
+                        Duel.LastSummonPlayer,
+                        SummoningCards = ToIdList(Duel.SummoningCards),
+                        LastSummonedCards = ToIdList(Duel.LastSummonedCards),
+                        ActivatedCardsThisTurn = cardsActivatedThisTurn,
                     },
-                    Hand = new
+                    Bot = new
                     {
-                        CardsInHand = GetNormalizedValue(bot.Hand.Count, 100),
-                        Cards = PadCardIdArray(bot.Hand, MAX_HAND_SIZE)
-                    },
-                    Field = new
-                    {
-                        MonsterZone = Enumerable.Range(0, 5).Select(i => new
+                        Lifepoints = GetNormalizedValue(bot.LifePoints, 8000),
+                        UnderAttack = GetBoolAsIntValue(bot.UnderAttack),
+                        Deck = new
                         {
-                            Occupied = GetBoolAsIntValue(bot.MonsterZone[i] != null),
-                            BaseCardData = bot.MonsterZone[i]?.Id ?? 0,
-                            CurrAttack = GetNormalizedValue(bot.MonsterZone[i]?.Attack ?? 0, 8000),
-                            CurrDefense = GetNormalizedValue(bot.MonsterZone[i]?.Defense ?? 0, 8000),
-                            IsFaceup = GetBoolAsIntValue(bot.MonsterZone[i]?.IsFaceup() ?? false),
-                            Position = OneHotEncodePosition((int)(bot.MonsterZone[i]?.Position ?? 0)),
-                            Battling = GetBoolAsIntValue(Bot.BattlingMonster == bot.MonsterZone[i]),
-                            Attacked = GetBoolAsIntValue(bot.MonsterZone[i]?.Attacked ?? false),
-                            Owner = bot.MonsterZone[i]?.Owner ?? 0,
-                            Controller = bot.MonsterZone[i]?.Controller ?? 0,
-                            EquipCards = bot.MonsterZone[i]?.EquipCards.Select(c => c.Id).ToArray() ?? new int[0],
-                        }),
-                        Backrow = Enumerable.Range(0, 5).Select(i => new
+                            CardsInDeck = GetNormalizedValue(bot.Deck.Count, 100),
+                            Cards = currentDecklist?.ToArray() ?? EmptyIntArray
+                        },
+                        Hand = new
                         {
-                            Occupied = GetBoolAsIntValue(bot.SpellZone[i] != null),
-                            BaseCardData = bot.SpellZone[i]?.Id ?? 0,
-                            IsFaceup = GetBoolAsIntValue(bot.SpellZone[i]?.IsFaceup() ?? false),
-                            Position = OneHotEncodePosition((int)(bot.SpellZone[i]?.Position ?? 0)),
-                            Owner = bot.SpellZone[i]?.Owner ?? 0,
-                            Controller = bot.SpellZone[i]?.Controller ?? 0
-                        })
+                            CardsInHand = GetNormalizedValue(bot.Hand.Count, 100),
+                            Cards = ToIdList(bot.Hand)
+                        },
+                        Field = new
+                        {
+                            MonsterZone = Enumerable.Range(0, 5)
+                        .Select(i => (object)BuildMonsterSlotPayload(bot.MonsterZone[i], Bot.BattlingMonster))
+                        .ToArray(),
+
+                            Backrow = Enumerable.Range(0, 5)
+                        .Select(i => (object)BuildBackrowSlotPayload(bot.SpellZone[i]))
+                        .ToArray()
+                        },
+
+                        Graveyard = new
+                        {
+                            CardsInGrave = GetNormalizedValue(bot.Graveyard.Count, 100),
+                            Cards = ToIdList(bot.Graveyard)
+                        },
+                        Banished = new
+                        {
+                            CardsBanished = GetNormalizedValue(bot.Banished.Count, 100),
+                            Cards = ToIdList(bot.Banished)
+                        },
                     },
-                    Graveyard = new
+                    Enemy = new
                     {
-                        CardsInGrave = GetNormalizedValue(bot.Graveyard.Count, 100),
-                        Cards = PadCardIdArray(bot.Graveyard, MAX_GRAVEYARD_SIZE)
+                        Lifepoints = GetNormalizedValue(enemy.LifePoints, 8000),
+                        UnderAttack = GetBoolAsIntValue(enemy.UnderAttack),
+                        Deck = new
+                        {
+                            CardsInDeck = GetNormalizedValue(enemy.Deck.Count, 100),
+                        },
+                        Hand = new
+                        {
+                            CardsInHands = GetNormalizedValue(enemy.Hand.Count, 100),
+                        },
+                        Field = new
+                        {
+                            MonsterZone = Enumerable.Range(0, 5)
+                        .Select(i => (object)BuildMonsterSlotPayload(enemy.MonsterZone[i], Bot.BattlingMonster))
+                        .ToArray(),
+
+                            Backrow = Enumerable.Range(0, 5)
+                        .Select(i => (object)BuildBackrowSlotPayload(enemy.SpellZone[i]))
+                        .ToArray()
+                        },
+
+                        Graveyard = new
+                        {
+                            CardsInGrave = GetNormalizedValue(enemy.Graveyard.Count, 100),
+                            Cards = ToIdList(enemy.Graveyard)
+                        },
+                        Banished = new
+                        {
+                            CardsBanished = GetNormalizedValue(enemy.Banished.Count, 100),
+                            Cards = ToIdList(enemy.Banished)
+                        },
                     },
-                    Banished = new
+                    CurrentChain = new
                     {
-                        CardsBanished = GetNormalizedValue(bot.Banished.Count, 100),
-                        Cards = PadCardIdArray(bot.Banished, MAX_BANISHED_SIZE)
-                    },
+                        ChainCount = GetNormalizedValue(Duel.CurrentChain.Count, 20),
+                        Duel.LastChainPlayer,
+                        CurrentChain = ToIdList(Duel.CurrentChain),
+                        ChainTargets = ToIdList(Duel.ChainTargets),
+                        ChainTargetOnly = ToIdList(Duel.ChainTargetOnly)
+                    }
                 },
-                Enemy = new
+                ActionSpace = new
                 {
-                    Lifepoints = GetNormalizedValue(enemy.LifePoints, 8000),
-                    UnderAttack = GetBoolAsIntValue(enemy.UnderAttack),
-                    Deck = new
-                    {
-                        CardsInDeck = GetNormalizedValue(enemy.Deck.Count, 100),
-                    },
-                    Hand = new
-                    {
-                        CardsInHands = GetNormalizedValue(enemy.Hand.Count, 100),
-                    },
-                    Field = new
-                    {
-                        MonsterZone = Enumerable.Range(0, 5).Select(i => new
-                        {
-                            Occupied = GetBoolAsIntValue(enemy.MonsterZone[i] != null),
-                            BaseCardData = enemy.MonsterZone[i]?.Id ?? 0,
-                            CurrAttack = GetNormalizedValue(enemy.MonsterZone[i]?.Attack ?? 0, 8000),
-                            CurrDefense = GetNormalizedValue(enemy.MonsterZone[i]?.Defense ?? 0, 8000),
-                            IsFaceup = GetBoolAsIntValue(enemy.MonsterZone[i]?.IsFaceup() ?? false),
-                            Position = OneHotEncodePosition((int)(enemy.MonsterZone[i]?.Position ?? 0)),
-                            Battling = GetBoolAsIntValue(Bot.BattlingMonster == enemy.MonsterZone[i]),
-                            Attacked = GetBoolAsIntValue(enemy.MonsterZone[i]?.Attacked ?? false),
-                            Owner = enemy.MonsterZone[i]?.Owner ?? 0,
-                            Controller = enemy.MonsterZone[i]?.Controller ?? 0,
-                            EquipCards = enemy.MonsterZone[i]?.EquipCards.Select(c => c.Id).ToArray() ?? new int[0],
-                        }),
-                        Backrow = Enumerable.Range(0, 5).Select(i => new
-                        {
-                            Occupied = GetBoolAsIntValue(enemy.SpellZone[i] != null),
-                            BaseCardData = enemy.SpellZone[i]?.Id ?? 0,
-                            IsFaceup = GetBoolAsIntValue(enemy.SpellZone[i]?.IsFaceup() ?? false),
-                            Position = OneHotEncodePosition((int)(enemy.SpellZone[i]?.Position ?? 0)),
-                            Owner = enemy.SpellZone[i]?.Owner ?? 0,
-                            Controller = enemy.SpellZone[i]?.Controller ?? 0
-                        })
-                    },
-                    Graveyard = new
-                    {
-                        CardsInGrave = GetNormalizedValue(enemy.Graveyard.Count, 100),
-                        Cards = PadCardIdArray(enemy.Graveyard, MAX_GRAVEYARD_SIZE)
-                    },
-                    Banished = new
-                    {
-                        CardsBanished = GetNormalizedValue(enemy.Banished.Count, 100),
-                        Cards = PadCardIdArray(enemy.Banished, MAX_BANISHED_SIZE)
-                    },
-                },
-                CurrentChain = new
-                {
-                    ChainCount = GetNormalizedValue(Duel.CurrentChain.Count, 20),
-                    Duel.LastChainPlayer,
-                    CurrentChain = PadCardIdArray(Duel.CurrentChain, MAX_CURRENT_CHAIN),
-                    ChainTargets = PadCardIdArray(Duel.ChainTargets, MAX_CHAIN_TARGETS),
-                    ChainTargetOnly = PadCardIdArray(Duel.ChainTargetOnly, MAX_CHAIN_TARGET_ONLY)
-                },
-                AvailableOptions = new
-                {
-                    NormalSummon = BuildOptionGroup(Main?.SummonableCards),
-                    SetMonster = BuildOptionGroup(Main?.MonsterSetableCards),
-                    SpecialSummon = BuildOptionGroup(Main?.SpecialSummonableCards),
-                    Activate = BuildOptionGroup(Main?.ActivableCards ?? Battle?.ActivableCards, withLoc: true),
-                    Repos = BuildOptionGroup(Main?.ReposableCards),
-                    SetSpell = BuildOptionGroup(Main?.SpellSetableCards),
-                    Attack = BuildOptionGroup(Battle?.AttackableCards),
+                    NormalSummon = BuildOptionGroupCompact(Main?.SummonableCards),
+                    SetMonster = BuildOptionGroupCompact(Main?.MonsterSetableCards),
+                    SpecialSummon = BuildOptionGroupCompact(Main?.SpecialSummonableCards, withLoc: true),
+                    Activate = BuildOptionGroupCompact(Main?.ActivableCards ?? Battle?.ActivableCards, withLoc: true, descriptions: Main?.ActivableDescs ?? Battle?.ActivableDescs),
+                    Repos = BuildOptionGroupCompact(Main?.ReposableCards),
+                    SetSpell = BuildOptionGroupCompact(Main?.SpellSetableCards),
+                    Attack = BuildOptionGroupCompact(Battle?.AttackableCards),
                     ChangePhase = new
                     {
                         CanBattlePhase = Main?.CanBattlePhase ?? false,
@@ -952,7 +949,7 @@ namespace WindBot.Game.AI.Decks
                     CardData = new
                     {
                         Count = cardData?.Cards.Count ?? 0,
-                        Options = PadCardSelectionOptions(cardData?.Cards, MAX_CARD_SELECTION_OPTIONS),
+                        Options = BuildCardSelectionOptions(cardData?.Cards),
                         Min = cardData?.Min ?? 0,
                         Max = cardData?.Max ?? 0,
                         Hint = cardData?.Hint ?? 0,
@@ -961,7 +958,7 @@ namespace WindBot.Game.AI.Decks
                     ChainData = new
                     {
                         Count = chainData?.Cards.Count ?? 0,
-                        Options = PadChainSelectionOptions(chainData?.Cards, MAX_CHAIN_SELECTION_OPTIONS),
+                        Options = BuildChainSelectionOptions(chainData?.Cards),
                         Forced = chainData?.Forced ?? false
                     },
                     YesNoData = new
@@ -973,92 +970,139 @@ namespace WindBot.Game.AI.Decks
                         CardId = effectYesNoData?.Card?.Id ?? -1,
                         Desc = effectYesNoData?.Desc ?? -1
                     },
+                    OptionData = new
+                    {
+                        Count = optionData?.Options.Count ?? 0,
+                        Options = optionData?.Options?.ToArray() ?? EmptyLongArray
+                    },
                     PositionData = new
                     {
                         CardId = positionData?.CardId ?? -1,
-                        Positions = PadPositionArray(positionData?.Positions, 5) // Assuming max 5 position options
+                        Positions = BuildPositionArray(positionData?.Positions)
                     }
                 }
             };
 
 
-            string json = JsonConvert.SerializeObject(gameStateInput, Formatting.Indented);
-            Console.WriteLine(json);
+            string json = JsonConvert.SerializeObject(gameStateInput, Formatting.Indented, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
+            //Console.WriteLine(json);
 
             return json;
         }
 
-        // Helper method to pad card selection options
-        private object[] PadCardSelectionOptions(IList<ClientCard> cards, int maxSize)
+        private object BuildMonsterSlotPayload(ClientCard card, ClientCard battlingRef)
         {
-            var result = new object[maxSize];
-            for (int i = 0; i < maxSize; i++)
+            if (card == null)
             {
-                if (cards != null && i < cards.Count)
+                // Only send Occupied when empty
+                return new { Occupied = 0 };
+            }
+
+            // Only include non-empty EquipCards; nulls will be omitted by the serializer
+            int[] equip = (card.EquipCards != null && card.EquipCards.Count > 0)
+                ? card.EquipCards.Select(c => c.Id).ToArray()
+                : null;
+
+            return new
+            {
+                Occupied = 1,
+                BaseCardData = card.Id,
+                CurrAttack = GetNormalizedValue(card.Attack, 8000),
+                CurrDefense = GetNormalizedValue(card.Defense, 8000),
+                IsFaceup = GetBoolAsIntValue(card.IsFaceup()),
+                Position = OneHotEncodePosition((int)card.Position),
+                Battling = GetBoolAsIntValue(battlingRef == card),
+                Attacked = GetBoolAsIntValue(card.Attacked),
+                Owner = card.Owner,
+                Controller = card.Controller,
+                EquipCards = equip
+            };
+        }
+
+        private object BuildBackrowSlotPayload(ClientCard card)
+        {
+            if (card == null)
+            {
+                return new { Occupied = 0 };
+            }
+
+            return new
+            {
+                Occupied = 1,
+                BaseCardData = card.Id,
+                IsFaceup = GetBoolAsIntValue(card.IsFaceup()),
+                Position = OneHotEncodePosition((int)card.Position),
+                Owner = card.Owner,
+                Controller = card.Controller
+            };
+        }
+
+
+        private int[] ToIdList(IEnumerable<ClientCard> cards)
+        {
+            if (cards == null) return EmptyIntArray;
+            return cards.Select(c => c.Id).ToArray();
+        }
+
+        private object BuildOptionGroupCompact(IList<ClientCard> cards, bool withLoc = false, IList<long> descriptions = null)
+        {
+            cards ??= Array.Empty<ClientCard>();
+            int ind = 0;
+            var feats = cards.Select(c => new
+            {
+                BaseCardData = c.Id,
+                // Only include Location and description when it matters; otherwise null (to be omitted at serialize time)
+                Location = withLoc ? OneHotEncodeLocation(c.Location, locationMatters: true) : null,
+                Description = descriptions?[ind++],
+            }).ToArray();
+
+            return new
+            {
+                Count = feats.Length,
+                Cards = feats
+            };
+        }
+
+        // Card selection list (no padding)
+        private object[] BuildCardSelectionOptions(IList<ClientCard> cards)
+        {
+            if (cards == null) return Array.Empty<object>();
+            var result = new object[cards.Count];
+            for (int i = 0; i < cards.Count; i++)
+            {
+                result[i] = new
                 {
-                    result[i] = new
-                    {
-                        Index = i,
-                        BaseCardData = cards[i].Id,
-                        Location = (int)cards[i].Location,
-                    };
-                }
-                else
-                {
-                    result[i] = new
-                    {
-                        Index = -1,
-                        BaseCardData = 0,
-                        Location = -1,
-                    };
-                }
+                    Index = i,
+                    BaseCardData = cards[i].Id,
+                    Location = (int)cards[i].Location
+                };
             }
             return result;
         }
 
-        // Helper method to pad chain selection options
-        private object[] PadChainSelectionOptions(IList<ClientCard> cards, int maxSize)
+        // Chain selection list (no padding)
+        private object[] BuildChainSelectionOptions(IList<ClientCard> cards)
         {
-            var result = new object[maxSize];
-            for (int i = 0; i < maxSize; i++)
+            if (cards == null) return Array.Empty<object>();
+            var result = new object[cards.Count];
+            for (int i = 0; i < cards.Count; i++)
             {
-                if (cards != null && i < cards.Count)
+                result[i] = new
                 {
-                    result[i] = new
-                    {
-                        Index = i,
-                        BaseCardData = cards[i].Id
-                    };
-                }
-                else
-                {
-                    result[i] = new
-                    {
-                        Index = -1,
-                        BaseCardData = 0
-                    };
-                }
+                    Index = i,
+                    BaseCardData = cards[i].Id
+                };
             }
             return result;
         }
 
-        // Helper method to pad position arrays
-        private int[] PadPositionArray(IList<CardPosition> positions, int maxSize)
+        // Positions (no padding)
+        private int[] BuildPositionArray(IList<CardPosition> positions)
         {
-            var result = new int[maxSize];
-            for (int i = 0; i < maxSize; i++)
-            {
-                if (positions != null && i < positions.Count)
-                {
-                    result[i] = (int)positions[i];
-                }
-                else
-                {
-                    result[i] = -1; // Use -1 to indicate empty position
-                }
-            }
-            return result;
+            if (positions == null) return Array.Empty<int>();
+            return positions.Select(p => (int)p).ToArray();
         }
+
 
         private bool IsBotsTurn()
         {
@@ -1077,11 +1121,6 @@ namespace WindBot.Game.AI.Decks
             return attribute?.File ?? "DefaultDeckName";
         }
 
-        private int GetCardId(int konamiCode)
-        {
-            return konamiCode;
-        }
-
         private int[] OneHotEncodeLocation(CardLocation location, bool locationMatters = true)
         {
             // Order: Deck, Hand, MonsterZone, SpellZone, Grave
@@ -1098,6 +1137,7 @@ namespace WindBot.Game.AI.Decks
             else if ((location & CardLocation.SpellZone) != 0) oneHot[3] = 1;
             else if ((location & CardLocation.Grave) != 0) oneHot[4] = 1;
             // If none of the tracked bits are present, array stays all-zero.
+            // TODO: Add banished, Pendulum and EMZ
 
             return oneHot;
         }

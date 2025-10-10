@@ -9,7 +9,7 @@ using System.Linq;
 
 namespace WindBot.Game.AI.Decks
 {
-    [Deck("Basic", "AI_Yugi_Kaiba_Beat", "Easy")]
+    [Deck("Basic", "Test", "Easy")]
     public class ManualExecutor : Executor
     {
 
@@ -376,6 +376,32 @@ namespace WindBot.Game.AI.Decks
             }
         }
 
+        public override int OnSelectOption(IList<long> options)
+        {
+            Console.WriteLine("Select an option from the following list:");
+            for (int i = 0; i < options.Count; i++)
+            {
+                Console.WriteLine($"{i} - {options[i]}");
+            }
+            Console.WriteLine("Enter the index of the option you want to select.");
+            while (true)
+            {
+                try
+                {
+                    string response = GetUserInput("Index: ");
+                    int index = int.Parse(response);
+                    if (index >= 0 && index < options.Count)
+                        return index;
+                    else
+                        Console.WriteLine("Invalid index. Please try again.");
+                }
+                catch (FormatException)
+                {
+                    Console.WriteLine("Invalid input. Please enter a valid number.");
+                }
+            }
+        }
+
         public override int OnSelectChain(IList<ClientCard> cards, bool forced)
         {
             Console.WriteLine("Chain Card?");
@@ -482,7 +508,7 @@ namespace WindBot.Game.AI.Decks
 
             sb.AppendLine("Activate Options (a):");
             for (int i = 0; i < Main.ActivableCards.Count; i++)
-                sb.AppendLine($"{i} - {Main.ActivableCards[i].Name}");
+                sb.AppendLine($"{i} - {Main.ActivableCards[i].Name + " " + Main.ActivableDescs[i]}");
 
             sb.AppendLine("Spell Set Options (s):");
             for (int i = 0; i < Main.SpellSetableCards.Count; i++)

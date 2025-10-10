@@ -51,6 +51,11 @@ namespace WindBot.Game.AI
             return Rand.Next(2) > 0;
         }
 
+        public virtual void OnGameEnd(string textResult, bool gameError = false)
+        {
+            // For overriding
+        }
+
         /// <summary>
         /// Called when the AI has to decide if it should attack
         /// </summary>
