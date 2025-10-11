@@ -51,6 +51,11 @@ namespace WindBot.Game.AI.Decks
         public bool Cancelable;
     }
 
+    public class SelectOptionData
+    {
+        public IList<long> Options;
+    }
+
     public class BaseCardData
     {
         [JsonPropertyName("cleanName")]
@@ -650,6 +655,31 @@ namespace WindBot.Game.AI.Decks
             }
         }
 
+        public override int OnSelectOption(IList<long> options)
+        {
+            var selectOptionData = new SelectOptionData() { Options = options };
+            var gamestate = GetGameState(GameMessage.SelectOption, optionData: selectOptionData);
+
+            int index;
+            var validGroups = new Dictionary<char, int> { { 'i', options.Count } };
+            while (true)
+            {
+                try
+                {
+                    string response = GetInferenceResult(gamestate);
+                    if (!TryParseAction(response, validGroups, out _, out index))
+                        throw new FormatException("Input must be a valid action (e.g., 'b2', 'a1').");
+                    if (index < 0 || index >= options.Count)
+                        throw new FormatException($"Index out of range. Must be between 0 and {options.Count - 1}.");
+                    return index; // Return the selected option index
+                }
+                catch (FormatException ex)
+                {
+                    Console.WriteLine($"Invalid input. {ex.Message} Please try again.");
+                }
+            }
+        }
+
         public override CardPosition OnSelectPosition(int cardId, IList<CardPosition> positions)
         {
             var positionData = new SelectPositionData() { CardId = cardId, Positions = positions };
@@ -816,7 +846,7 @@ namespace WindBot.Game.AI.Decks
         public string GetGameState(GameMessage currentGameState,
             SelectCardData cardData = null, SelectChainData chainData = null,
             SelectYesNoData yesNoData = null, SelectEffectYesNoData effectYesNoData = null,
-            SelectPositionData positionData = null)
+            SelectPositionData positionData = null, SelectOptionData optionData = null)
         {
             var bot = Util.Bot;
             var enemy = Util.Enemy;
@@ -980,6 +1010,11 @@ namespace WindBot.Game.AI.Decks
                     {
                         CardId = GetCardDataFromKonamiCode(effectYesNoData?.Card?.Id ?? -1),
                         Desc = effectYesNoData?.Desc ?? -1
+                    },
+                    OptionData = new
+                    {
+                        Count = optionData?.Options.Count ?? 0,
+                        Options = optionData?.Options?.ToArray() ?? new long[5] { 0, 0, 0, 0, 0 },
                     },
                     PositionData = new
                     {
