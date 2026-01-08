@@ -9,7 +9,7 @@ using System.Linq;
 
 namespace WindBot.Game.AI.Decks
 {
-    [Deck("Basic", "Test", "Easy")]
+    [Deck("Basic", "AI_Yugi_Kaiba_Beat", "Easy")]
     public class ManualExecutor : Executor
     {
 

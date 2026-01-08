@@ -691,9 +691,9 @@ namespace WindBot.Game.AI.Decks
                     string response = GetInferenceResult(gamestate);
                     if (!TryParseAction(response, validGroups, out _, out index))
                         throw new FormatException("Input must be a valid action (e.g., 'b2', 'a1').");
-                    if (index < 0 || index >= cards.Count)
+                    if (index < -1 || index >= cards.Count)
                         throw new FormatException($"Index out of range. Must be between 0 and {cards.Count - 1}.");
-                    return index - 1; // Adjusting index to match game logic (0 for no chain, 1+ for card index)
+                    return index;
                 }
                 catch (FormatException ex)
                 {
@@ -803,7 +803,7 @@ namespace WindBot.Game.AI.Decks
             if (!validGroups.ContainsKey(group))
                 return false;
 
-            if (!int.TryParse(response.Substring(1), out index) || index < 0)
+            if (!int.TryParse(response.Substring(1), out index) || index < -1)
                 return false;
 
             if (group == 'p')
@@ -946,7 +946,7 @@ namespace WindBot.Game.AI.Decks
                         CanMainPhaseTwo = Battle?.CanMainPhaseTwo ?? false,
                         CanEndPhase = CanEndPhase()
                     },
-                    CardData = new
+                    SelectCardData = new
                     {
                         Count = cardData?.Cards.Count ?? 0,
                         Options = BuildCardSelectionOptions(cardData?.Cards),
