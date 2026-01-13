@@ -1,6 +1,6 @@
 # WindBot Ignite
 
-A fork of [WindBot](https://github.com/ProjectIgnis/windbot/), modify for use as an entry point to the EDOPro client for AI models
+A fork of [WindBot](https://github.com/ProjectIgnis/windbot/), modified for use as an entry point to the EDOPro client for AI models
 
 ### Usage
 
