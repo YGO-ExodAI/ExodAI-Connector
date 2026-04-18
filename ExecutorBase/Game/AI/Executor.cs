@@ -29,6 +29,12 @@ namespace WindBot.Game.AI
 
         public Random Rand;
 
+        // ExodAI channel: optional callback wired up by GameBehavior so
+        // executors can inject custom CTOS_AI_THOUGHT packets (uint16 length +
+        // UTF-8 JSON bytes) alongside their standard Response. Null when the
+        // server is running without network context (e.g., unit tests).
+        public Action<byte[]> SendCtosAiThought;
+
         protected Executor(GameAI ai, Duel duel)
         {
             Rand = new Random();

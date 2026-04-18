@@ -74,6 +74,17 @@ namespace WindBot.Game
 
             _ai = new GameAI(_duel, Game.Dialog, Game.Chat, Game.Log, Program.AssetPath);
             _ai.Executor = DecksManager.Instantiate(_ai, _duel, Game.Deck);
+            // ExodAI: bind the CTOS_AI_THOUGHT sender so executors (e.g.,
+            // ExodAIExecutor) can embed their per-decision reasoning into the
+            // .yrpX stream. Server wraps this into MSG_AI_THOUGHT.
+            _ai.Executor.SendCtosAiThought = jsonBytes =>
+            {
+                if(jsonBytes == null || jsonBytes.Length > ushort.MaxValue) return;
+                var w = GamePacketFactory.Create(CtosMessage.AiThought);
+                w.Write((ushort)jsonBytes.Length);
+                w.Write(jsonBytes);
+                Connection.Send(w);
+            };
             if(Game.DeckFile != null)
                 Logger.WriteLine("Custom deck provided, loading: " + Game.DeckFile + ".");
             Deck = Deck.Load(Game.DeckFile ?? _ai.Executor.Deck);

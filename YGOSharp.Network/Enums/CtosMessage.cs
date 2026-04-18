@@ -19,6 +19,10 @@
         HsNotReady = 0x23,
         HsKick = 0x24,
         HsStart = 0x25,
-        RematchResponse = 0xf0
+        RematchResponse = 0xf0,
+        // ExodAI extension. Sent right before CTOS.Response at each top-level
+        // bot decision. Payload: uint16 length + UTF-8 JSON bytes. The server
+        // injects a matching MSG_AI_THOUGHT into the replay stream.
+        AiThought = 0x30
     }
 }
