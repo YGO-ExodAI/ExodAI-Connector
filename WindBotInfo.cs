@@ -24,6 +24,16 @@ namespace WindBot
         [DataMember] public int bestOf { get; set; } = 1;
         [DataMember] public int forb { get; set; } = 0;
         [DataMember] public ushort extraRules { get; set; } = 0;
+        // ExodAI: server's HostInfo has a DeckSizes struct tail (6 uint16's) that
+        // WindBot's CreateGame used to skip, leaving it as implicit zero bytes
+        // server-side. That caused CheckDeckSize to reject every deck with
+        // main.max=0 → ERRMSG_DECKERROR. Defaults cover standard decks.
+        [DataMember] public ushort mainMin { get; set; } = 40;
+        [DataMember] public ushort mainMax { get; set; } = 60;
+        [DataMember] public ushort extraMin { get; set; } = 0;
+        [DataMember] public ushort extraMax { get; set; } = 15;
+        [DataMember] public ushort sideMin { get; set; } = 0;
+        [DataMember] public ushort sideMax { get; set; } = 15;
         [DataMember] public string notes { get; set; } = "";
     }
 

@@ -221,6 +221,7 @@ namespace WindBot.Game
             /*int forbidden_types =*/ packet.ReadInt32();
             /*int extra_rules =*/ packet.ReadInt32();
             _room.Players = team1 + team2;
+            Logger.WriteLine($"[OnJoinGame] players={_room.Players} team1={team1} team2={team2} duel_flag=0x{duel_flag:X8}");
             const int DUEL_EMZONE = 0x2000;
             const int DUEL_FSX_MMZONE = 0x4000;
             _ai.Duel.IsNewRule = (duel_flag & DUEL_EMZONE) != 0;
@@ -262,8 +263,10 @@ namespace WindBot.Game
         {
             int type = packet.ReadByte();
             int pos = type & 0xF;
+            Logger.WriteLine($"[OnTypeChange] type=0x{type:X2} pos={pos} isHost={((type >> 4) & 0xF) != 0} players={_room.Players}");
             if (pos < 0 || pos >= _room.Players)
             {
+                Logger.WriteLine($"[OnTypeChange] REJECTED — pos out of range, closing");
                 Connection.Close();
                 return;
             }
@@ -306,8 +309,12 @@ namespace WindBot.Game
                 _room.Names[pos] = null;
             }
 
+            Logger.WriteLine($"[OnPlayerChange] pos={pos} state={state} host={_room.IsHost} ready=[{_room.IsReady[0]},{_room.IsReady[1]}]");
             if (_room.IsHost && _room.IsReady[0] && _room.IsReady[1])
+            {
+                Logger.WriteLine($"[OnPlayerChange] both ready → sending HsStart");
                 Connection.Send(CtosMessage.HsStart);
+            }
         }
 
         private void OnSelectHand(BinaryReader packet)
@@ -317,12 +324,14 @@ namespace WindBot.Game
                 result = _hand;
             else
                 result = _ai.OnRockPaperScissors();
+            Logger.WriteLine($"[OnSelectHand] sending HandResult={result}");
             Connection.Send(CtosMessage.HandResult, (byte)result);
         }
 
         private void OnSelectTp(BinaryReader packet)
         {
             bool start = _ai.OnSelectHand();
+            Logger.WriteLine($"[OnSelectTp] start={start}");
             Connection.Send(CtosMessage.TpResult, (byte)(start ? 1 : 0));
         }
 
@@ -355,6 +364,7 @@ namespace WindBot.Game
 
         private void OnDuelEnd(BinaryReader packet)
         {
+            Logger.WriteLine("[OnDuelEnd] duel ended, closing");
             Connection.Close();
         }
 
@@ -375,18 +385,27 @@ namespace WindBot.Game
             packet.ReadByte();
             packet.ReadByte();
             packet.ReadByte();
+            // ExodAI: surface the error type in Release builds — otherwise a
+            // silent Connection.Close() on line ~end makes bot-match debug
+            // impossible. msg=1 JOINERROR, 2 DECKERROR, 3 SIDEERROR,
+            // 4 VERSIONERROR_OLD, 5 VERSIONERROR.
+            Logger.WriteLine($"[OnErrorMsg] etype={msg}");
             if (msg == 2) //ERRMSG_DECKERROR
             {
                 int flag = packet.ReadInt32();
-                packet.ReadInt32();
-                packet.ReadInt32();
-                packet.ReadInt32();
+                int current = packet.ReadInt32();
+                int minimum = packet.ReadInt32();
+                int maximum = packet.ReadInt32();
                 int code = packet.ReadInt32();
+                // flag: 0 NONE, 1 LFLIST, 2 OCGONLY, 3 TCGONLY, 4 UNKNOWNCARD,
+                // 5 CARDCOUNT, 6 MAINCOUNT, 7 EXTRACOUNT, 8 SIDECOUNT, 9 FORBTYPE,
+                // 10 UNOFFICIALCARD, 11 INVALIDSIZE, 12 TOOMANYLEGENDS, 13 TOOMANYSKILLS.
+                Logger.WriteLine($"[OnErrorMsg] DECKERROR derr_type={flag} cur={current} min={minimum} max={maximum} code={code}");
                 if (flag <= 5) //DECKERROR_CARDCOUNT
                 {
-                    NamedCard card = NamedCard.Get(code);
-                    if (card != null)
-                        _ai.OnDeckError(card.Name);
+                    NamedCard namedCard = NamedCard.Get(code);
+                    if (namedCard != null)
+                        _ai.OnDeckError(namedCard.Name);
                     else
                         _ai.OnDeckError("Unknown Card");
                 }
@@ -442,6 +461,7 @@ namespace WindBot.Game
 
         private void OnStart(BinaryReader packet)
         {
+            Logger.WriteLine("[OnStart] game message Start received — duel core running");
             stopwatch = Stopwatch.StartNew();
             int type = packet.ReadByte();
             _duel.IsFirst = (type & 0xF) == 0;

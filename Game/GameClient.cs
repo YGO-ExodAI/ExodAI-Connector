@@ -108,6 +108,21 @@ namespace WindBot.Game
             packet.Write((uint)(CreateGame.duelFlags & 0xFFFFFFFF));
             packet.Write(CreateGame.forb);
             packet.Write(CreateGame.extraRules);
+            // ExodAI: 6x uint16 DeckSizes (main/extra/side × min/max). Replaces
+            // the old 2-byte padding that left server-side sizes zeroed and
+            // caused ERRMSG_DECKERROR on every deck. Must stay in the exact
+            // order main.min, main.max, extra.min, extra.max, side.min, side.max
+            // to match HostInfo layout in gframe/network.h.
+            packet.Write(CreateGame.mainMin);
+            packet.Write(CreateGame.mainMax);
+            packet.Write(CreateGame.extraMin);
+            packet.Write(CreateGame.extraMax);
+            packet.Write(CreateGame.sideMin);
+            packet.Write(CreateGame.sideMax);
+            // 2 bytes of tail padding: HostInfo has 4-byte struct alignment
+            // (max field align = uint32), and its layout ends at offset 66,
+            // so the struct is padded to 68. Without these bytes, name/pass/
+            // notes shift 2 bytes early on the server side → password mismatch.
             packet.Write(padding2);
             // name
             packet.WriteUnicode("", 20); // UNUSED
