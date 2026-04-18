@@ -14,11 +14,34 @@ namespace WindBot
     {
         public static string AssetPath;
 
+        // Bumped every iteration by Claude when WindBot-side source is changed.
+        // Logged at Main() entry so the user can confirm they're running the
+        // latest build. See also exodai_dev_build.h on the EDOPro side.
+        public const int DEV_BUILD = 16;
+
         internal static Random Rand;
 
         internal static void Main(string[] args)
         {
-            Logger.WriteLine("WindBot starting...");
+            // When stdout/stderr are pipes (not a console), .NET defaults to
+            // block-buffered writers — lines sit in a ~4KB buffer until it
+            // fills or the process exits. Wrap with AutoFlush=true so every
+            // Console.WriteLine flushes immediately and downstream readers
+            // (e.g. EDOPro's log forwarder) see output in real time.
+            // Wrapped in try/catch so that if for any reason this fails we
+            // still get default (buffered) output instead of dying silently.
+            try
+            {
+                Console.SetOut(new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true });
+                Console.SetError(new StreamWriter(Console.OpenStandardError()) { AutoFlush = true });
+                Console.WriteLine("[boot] stdout/stderr autoflush enabled");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[boot] failed to enable autoflush: " + ex.Message);
+            }
+
+            Logger.WriteLine($"WindBot starting... (dev build #{DEV_BUILD})");
 
             Config.Load(args);
 
