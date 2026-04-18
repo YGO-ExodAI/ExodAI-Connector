@@ -172,6 +172,9 @@ namespace WindBot.Game.AI.Decks
         {
             public float Confidence { get; set; }
             public float Value { get; set; }
+            // P(main player wins | current state), 0..1. Null when the
+            // deployed checkpoint predates the win-prob head.
+            public float? WinProb { get; set; }
             public int ValidCount { get; set; }
             public int DecisionType { get; set; }
             // Each entry: {"action": "n2", "prob": 0.45}. Ordered high→low.
@@ -189,6 +192,7 @@ namespace WindBot.Game.AI.Decks
             [JsonPropertyName("move")] public string Move { get; set; }
             [JsonPropertyName("confidence")] public float Confidence { get; set; }
             [JsonPropertyName("value")] public float Value { get; set; }
+            [JsonPropertyName("win_prob")] public float? WinProb { get; set; }
             [JsonPropertyName("valid_count")] public int ValidCount { get; set; }
             [JsonPropertyName("decision_type")] public int DecisionType { get; set; }
             [JsonPropertyName("top_actions")] public List<TopAction> TopActions { get; set; }
@@ -209,6 +213,51 @@ namespace WindBot.Game.AI.Decks
             Environment.GetEnvironmentVariable("EXODAI_RL_SERVER") ?? "http://localhost:8000";
         private static readonly string _machineId =
             Environment.GetEnvironmentVariable("EXODAI_MACHINE_ID") ?? Environment.MachineName;
+
+        // ExodAI eval harness overrides. When EXODAI_EVAL_HAND is set to 1/2/3,
+        // OnRockPaperScissors returns that value verbatim so the two bots can
+        // be pinned to a known outcome (e.g. A=rock, B=paper → B wins every
+        // time). When EXODAI_EVAL_GO_FIRST is set to 0/1, OnSelectHand returns
+        // that value so the RPS winner's go-first choice is also deterministic.
+        // Unset → default random behavior from the base Executor.
+        private static readonly int? _evalHand = ParseOptionalInt("EXODAI_EVAL_HAND");
+        private static readonly bool? _evalGoFirst = ParseOptionalBool("EXODAI_EVAL_GO_FIRST");
+
+        private static int? ParseOptionalInt(string name)
+        {
+            var v = Environment.GetEnvironmentVariable(name);
+            if (string.IsNullOrEmpty(v)) return null;
+            return int.TryParse(v, out int r) ? r : (int?)null;
+        }
+
+        private static bool? ParseOptionalBool(string name)
+        {
+            var v = Environment.GetEnvironmentVariable(name);
+            if (string.IsNullOrEmpty(v)) return null;
+            if (v == "1" || v.Equals("true", StringComparison.OrdinalIgnoreCase)) return true;
+            if (v == "0" || v.Equals("false", StringComparison.OrdinalIgnoreCase)) return false;
+            return null;
+        }
+
+        public override int OnRockPaperScissors()
+        {
+            if (_evalHand.HasValue && _evalHand.Value >= 1 && _evalHand.Value <= 3)
+            {
+                Console.WriteLine($"[ExodAI][eval] OnRockPaperScissors pinned to {_evalHand.Value}");
+                return _evalHand.Value;
+            }
+            return base.OnRockPaperScissors();
+        }
+
+        public override bool OnSelectHand()
+        {
+            if (_evalGoFirst.HasValue)
+            {
+                Console.WriteLine($"[ExodAI][eval] OnSelectHand pinned to {_evalGoFirst.Value}");
+                return _evalGoFirst.Value;
+            }
+            return base.OnSelectHand();
+        }
 
         public ExodAIExecutor(GameAI ai, Duel duel) : base(ai, duel)
         {
@@ -406,6 +455,10 @@ namespace WindBot.Game.AI.Decks
                     move_description = SafeDescribe(describe, move),
                     confidence = meta.Confidence,
                     value = meta.Value,
+                    // Clean 0..1 "how confident is the model that it wins
+                    // from here?" reading. Distinct from `value` (shaped).
+                    // null when an older checkpoint without the head is loaded.
+                    win_prob = meta.WinProb,
                     valid_count = meta.ValidCount,
                     top_actions = topActions,
                     phase = PhaseToString(Duel.Phase),
@@ -1022,6 +1075,7 @@ namespace WindBot.Game.AI.Decks
                             {
                                 Confidence = parsed.Confidence,
                                 Value = parsed.Value,
+                                WinProb = parsed.WinProb,
                                 ValidCount = parsed.ValidCount,
                                 DecisionType = parsed.DecisionType,
                                 TopActions = parsed.TopActions ?? new List<TopAction>(),
