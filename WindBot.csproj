@@ -19,6 +19,8 @@
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
   </PropertyGroup>
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -61,8 +63,17 @@
     <ApplicationIcon>WindBot.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="MessagePack, Version=3.1.4.0, Culture=neutral, PublicKeyToken=b4a0369545f0a1be, processorArchitecture=MSIL">
+      <HintPath>packages\MessagePack.3.1.4\lib\net472\MessagePack.dll</HintPath>
+    </Reference>
+    <Reference Include="MessagePack.Annotations, Version=3.1.4.0, Culture=neutral, PublicKeyToken=b4a0369545f0a1be, processorArchitecture=MSIL">
+      <HintPath>packages\MessagePack.Annotations.3.1.4\lib\netstandard2.0\MessagePack.Annotations.dll</HintPath>
+    </Reference>
     <Reference Include="Microsoft.Bcl.AsyncInterfaces, Version=9.0.0.2, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>packages\Microsoft.Bcl.AsyncInterfaces.9.0.2\lib\net462\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.NET.StringTools, Version=1.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>packages\Microsoft.NET.StringTools.17.11.4\lib\net472\Microsoft.NET.StringTools.dll</HintPath>
     </Reference>
     <Reference Include="Mono.Data.Sqlite">
       <HintPath>.\Mono.Data.Sqlite.dll</HintPath>
@@ -73,6 +84,9 @@
     <Reference Include="System" />
     <Reference Include="System.Buffers, Version=4.0.3.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>packages\System.Buffers.4.5.1\lib\net461\System.Buffers.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Collections.Immutable, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>packages\System.Collections.Immutable.8.0.0\lib\net462\System.Collections.Immutable.dll</HintPath>
     </Reference>
     <Reference Include="System.Core" />
     <Reference Include="System.Data" />
@@ -111,7 +125,6 @@
     <Compile Include="Game\AI\Deck.cs" />
     <Compile Include="Game\AI\Decks\ExodAIExecutor.cs" />
     <Compile Include="Game\AI\Decks\ManualExecutor.cs" />
-    <Compile Include="Game\AI\Decks\TearlamentsExecutor.cs" />
     <Compile Include="Game\DecksManager.cs" />
     <Compile Include="Game\GameBehavior.cs" />
     <Compile Include="Game\GameClient.cs" />
@@ -184,11 +197,41 @@
     </BootstrapperPackage>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
-       Other similar extension points exist, see Microsoft.Common.targets.
-  <Target Name="BeforeBuild">
+  <Import Project="packages\MessagePackAnalyzer.3.1.4\build\MessagePackAnalyzer.targets" Condition="Exists('packages\MessagePackAnalyzer.3.1.4\build\MessagePackAnalyzer.targets')" />
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('packages\MessagePackAnalyzer.3.1.4\build\MessagePackAnalyzer.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\MessagePackAnalyzer.3.1.4\build\MessagePackAnalyzer.targets'))" />
   </Target>
-  <Target Name="AfterBuild">
+  <!-- Mirror the build output into the ExodAI deploy folder so the EDOPro
+       client always launches the freshly built WindBot. Override the path
+       with the EXODAI_DEPLOY_DIR env var. Only .exe/.dll/.config/.pdb are
+       copied — data files like cards.cdb in the deploy folder are left
+       untouched. The step no-ops silently if the deploy folder doesn't
+       exist (e.g. on CI). -->
+  <Target Name="DeployToExodAI" AfterTargets="Build">
+    <PropertyGroup>
+      <ExodAIDeployDir Condition="'$(EXODAI_DEPLOY_DIR)' != ''">$(EXODAI_DEPLOY_DIR)</ExodAIDeployDir>
+      <ExodAIDeployDir Condition="'$(ExodAIDeployDir)' == ''">C:\Users\Joe\Documents\ExodAI\src\deploy\windbot-bin</ExodAIDeployDir>
+    </PropertyGroup>
+    <!-- Kill any running WindBot.exe so Copy doesn't hit a file-lock error
+         from a stale instance left over by a previous EDOPro session.
+         The /T flag also kills child processes. -ErrorAction SilentlyContinue
+         keeps the build green when no instance is running. -->
+    <Exec
+      Command="taskkill /F /IM WindBot.exe /T &gt;nul 2&gt;&amp;1"
+      IgnoreExitCode="true"
+      Condition="Exists('$(ExodAIDeployDir)')" />
+    <ItemGroup>
+      <ExodAIDeployFiles Include="$(TargetDir)*.exe;$(TargetDir)*.dll;$(TargetDir)*.config;$(TargetDir)*.pdb" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(ExodAIDeployFiles)"
+      DestinationFolder="$(ExodAIDeployDir)"
+      SkipUnchangedFiles="true"
+      Condition="Exists('$(ExodAIDeployDir)')" />
+    <Message Importance="high" Text="Deployed WindBot to $(ExodAIDeployDir)" Condition="Exists('$(ExodAIDeployDir)')" />
+    <Message Importance="high" Text="Skipped deploy: $(ExodAIDeployDir) does not exist" Condition="!Exists('$(ExodAIDeployDir)')" />
   </Target>
-  -->
 </Project>
