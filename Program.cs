@@ -17,7 +17,7 @@ namespace WindBot
         // Bumped every iteration by Claude when WindBot-side source is changed.
         // Logged at Main() entry so the user can confirm they're running the
         // latest build. See also exodai_dev_build.h on the EDOPro side.
-        public const int DEV_BUILD = 23;
+        public const int DEV_BUILD = 26;
 
         internal static Random Rand;
 
