@@ -210,7 +210,7 @@ namespace WindBot.Game.AI.Decks
         { Timeout = TimeSpan.FromSeconds(60) };
 
         private static readonly string _rlServerUrl =
-            Environment.GetEnvironmentVariable("EXODAI_RL_SERVER") ?? "http://localhost:8000";
+            Environment.GetEnvironmentVariable("EXODAI_RL_SERVER") ?? "http://localhost:7501";
         private static readonly string _machineId =
             Environment.GetEnvironmentVariable("EXODAI_MACHINE_ID") ?? Environment.MachineName;
 
