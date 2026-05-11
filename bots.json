@@ -262,5 +262,11 @@
         "deck": "Basic",
         "difficulty": 3,
         "masterRules": [ 1, 2, 3, 4, 5, 6, 7 ]
+    },
+    {
+        "name": "Heuristic V3",
+        "deck": "HeuristicV3",
+        "difficulty": 1,
+        "masterRules": [ 1, 2, 3, 4, 5 ]
     }
 ]

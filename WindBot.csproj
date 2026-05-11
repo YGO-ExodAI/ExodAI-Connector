@@ -124,6 +124,7 @@
     <Compile Include="Config.cs" />
     <Compile Include="Game\AI\Deck.cs" />
     <Compile Include="Game\AI\Decks\ExodAIExecutor.cs" />
+    <Compile Include="Game\AI\Decks\HeuristicV3Executor.cs" />
     <Compile Include="Game\AI\Decks\ManualExecutor.cs" />
     <Compile Include="Game\DecksManager.cs" />
     <Compile Include="Game\GameBehavior.cs" />
